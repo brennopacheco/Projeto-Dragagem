@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Comandante</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #eef1f6; }
+    .login-card {
+      background: #fff; border-radius: 12px; box-shadow: 0 4px 24px rgba(25,60,137,.12);
+      padding: 48px 40px; width: 100%; max-width: 380px; text-align: center;
+    }
+    .login-card img { height: 44px; margin-bottom: 24px; }
+    .login-card h1 { font-size: 18px; color: #193C89; margin-bottom: 4px; }
+    .login-card .subtitle { font-size: 13px; color: #F58A18; margin-bottom: 28px; font-weight: 600; }
+    .login-card input[type="password"] {
+      width: 100%; padding: 10px 14px; border: 1.5px solid #C9D0E0; border-radius: 6px;
+      font-size: 14px; margin-bottom: 16px; outline: none; transition: border-color .2s;
+    }
+    .login-card input[type="password"]:focus { border-color: #F58A18; }
+    .login-card button { width: 100%; padding: 10px; font-size: 14px; }
+    .login-error {
+      background: #fff0f0; color: #c62828; font-size: 12px; padding: 8px 12px;
+      border-radius: 6px; margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <img src="{{ url_for('static', filename='img/logo-vanoord.jpg') }}" alt="Van Oord">
+    <h1>Programacao de Dragagem</h1>
+    <p class="subtitle">Acesso Comandante</p>
+    {% if error %}
+      <div class="login-error">{{ error }}</div>
+    {% endif %}
+    <form method="POST">
+      <input type="password" name="senha" placeholder="Senha" autofocus required>
+      <button type="submit" class="btn btn-accent">Entrar</button>
+    </form>
+  </div>
+</body>
+</html>

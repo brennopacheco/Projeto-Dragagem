@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Programacao de Dragagem{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <img src="{{ url_for('static', filename='img/logo-vanoord.jpg') }}" alt="Van Oord" class="topbar-logo">
+      <div class="topbar-divider"></div>
+      <span class="topbar-title">PROGRAMACAO DE DRAGAGEM</span>
+    </div>
+    <nav class="topbar-nav">
+      <a href="/comandante" class="active">Programacao</a>
+      <a href="/comandante/logout">Sair</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    function toast(msg, type = 'success') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast ' + type + ' show';
+      setTimeout(() => el.classList.remove('show'), 3000);
+    }
+
+    async function api(url, opts = {}) {
+      const resp = await fetch(url, opts);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Erro');
+      return data;
+    }
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

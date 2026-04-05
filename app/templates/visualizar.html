@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Visualizar - Programacao de Dragagem{% endblock %}
+
+{% block content %}
+
+<!-- ===== Cabecalho do Projeto ===== -->
+<div class="viz-header">
+  <h1>PROGRAMACAO DE DRAGAGEM</h1>
+  <div class="viz-info">
+    <span id="viz-empresa"></span>
+    <span class="viz-sep">|</span>
+    <span>Vessel: <strong id="viz-vessel"></strong></span>
+    <span class="viz-sep">|</span>
+    <span>Project: <strong id="viz-project"></strong></span>
+    <span class="viz-sep">|</span>
+    <span>Site: <strong id="viz-site"></strong></span>
+  </div>
+  <div class="viz-periodo" id="viz-periodo"></div>
+</div>
+
+<!-- ===== Navegacao Semanal ===== -->
+<div class="viz-nav">
+  <button class="btn btn-outline btn-sm" onclick="changeWeek(-1)">&larr; Semana Anterior</button>
+  <button class="btn btn-secondary btn-sm" onclick="goToday()">Semana Atual</button>
+  <button class="btn btn-outline btn-sm" onclick="changeWeek(1)">Proxima Semana &rarr;</button>
+</div>
+
+<!-- ===== Tabela Principal ===== -->
+<div class="viz-table-wrap">
+  <table class="viz-table">
+    <thead>
+      <tr>
+        <th rowspan="2">Data</th>
+        <th colspan="2">Mare</th>
+        <th colspan="2">Hora</th>
+        <th rowspan="2">Area</th>
+        <th colspan="2">KP</th>
+        <th colspan="2">Linhas</th>
+        <th rowspan="2">Sistema<br>(x)</th>
+        <th rowspan="2">Obs</th>
+        <th rowspan="2">Dist.<br>Fundo (m)</th>
+        <th colspan="2">Angulo</th>
+        <th rowspan="2">Dir.<br>(xx)</th>
+        <th colspan="2">Velocidade</th>
+        <th rowspan="2">Consumo<br>Diesel</th>
+      </tr>
+      <tr>
+        <th class="sub">Status</th>
+        <th class="sub">Ampl.</th>
+        <th class="sub">Inicio</th>
+        <th class="sub">Final</th>
+        <th class="sub">Inicio</th>
+        <th class="sub">Final</th>
+        <th class="sub">De</th>
+        <th class="sub">Ate</th>
+        <th class="sub">Na Tela</th>
+        <th class="sub">No Nozzle</th>
+        <th class="sub">P/ Frente</th>
+        <th class="sub">P/ Re</th>
+      </tr>
+    </thead>
+    <tbody id="viz-body">
+      <tr><td colspan="19" class="viz-empty">Carregando...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ===== Legenda ===== -->
+<div class="viz-legend">
+  <p><strong>(x)</strong> AE = Agitador Externo (dois tubos de 45&deg;); AI = Agitador Interno (dois tubos para cima);
+  COR = Corrente; CL = Curva Lateral; DS = Desagregador; EH = Erosion Head ou Mass Flow;
+  JB = Jet Bar; JL = Jato Lateral; RD = Reduction</p>
+  <p><strong>(xx)</strong> Direction of the bow</p>
+  <p style="margin-top:4px"><strong>Areas:</strong> TR1, TR2, TR3, Bacia, Berco I, Berco II</p>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+  /* ---- Visualizacao styles ---- */
+  .viz-header {
+    text-align: center;
+    padding: 24px 0 12px;
+  }
+  .viz-header h1 {
+    font-size: 22px;
+    color: #193C89;
+    font-weight: 800;
+    letter-spacing: .5px;
+    margin-bottom: 8px;
+  }
+  .viz-info {
+    font-size: 13px;
+    color: #3a4a6a;
+    margin-bottom: 4px;
+  }
+  .viz-info strong { color: #1e2a3a; }
+  .viz-sep {
+    margin: 0 10px;
+    color: #C9D0E0;
+  }
+  .viz-periodo {
+    font-size: 15px;
+    font-weight: 700;
+    color: #193C89;
+    margin-top: 6px;
+  }
+  .viz-nav {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .viz-table-wrap {
+    overflow-x: auto;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(25,60,137,.08), 0 2px 12px rgba(25,60,137,.04);
+    border: 1px solid rgba(201,208,224,.4);
+    margin-bottom: 14px;
+  }
+  table.viz-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  table.viz-table thead th {
+    background: #193C89;
+    color: #fff;
+    padding: 9px 12px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 11px;
+    border: 1px solid #12306e;
+  }
+  table.viz-table thead th.sub {
+    background: #2550a5;
+    font-weight: 500;
+    font-size: 10px;
+  }
+  table.viz-table tbody td {
+    padding: 7px 10px;
+    border: 1px solid #e2e6f0;
+    text-align: center;
+    vertical-align: middle;
+  }
+  table.viz-table tbody tr:nth-child(even) td { background: #f6f8fc; }
+  table.viz-table tbody tr.viz-day-sep td {
+    border-top: 2.5px solid #C9D0E0;
+  }
+  .viz-status-en { color: #193C89; font-weight: 700; }
+  .viz-status-vz { color: #F58A18; font-weight: 700; }
+  .viz-date { font-weight: 600; text-align: left !important; padding-left: 10px !important; }
+  .viz-dow { color: #8a94a8; font-weight: 400; margin-left: 6px; }
+  .viz-empty { padding: 40px !important; color: #8a94a8; text-align: center; }
+  .viz-legend {
+    font-size: 11px;
+    color: #5a6a8a;
+    line-height: 1.7;
+    padding: 10px 0 20px;
+  }
+  .viz-legend strong { color: #193C89; }
+
+  @media print {
+    .topbar, .viz-nav { display: none !important; }
+    .viz-table-wrap { box-shadow: none; border: none; }
+  }
+</style>
+
+<script>
+  const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+
+  function mondayOf(d) {
+    const dt = new Date(d);
+    const day = dt.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    dt.setDate(dt.getDate() + diff);
+    dt.setHours(0,0,0,0);
+    return dt;
+  }
+
+  function fmtDate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function fmtDateBR(d) {
+    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  }
+
+  function parseDateBR(s) {
+    const [dd,mm,yyyy] = s.split('/');
+    return new Date(parseInt(yyyy), parseInt(mm)-1, parseInt(dd));
+  }
+
+  function diaSemana(s) {
+    return DIAS_SEMANA[parseDateBR(s).getDay()];
+  }
+
+  // Read ?semana= from URL or default to today
+  const params = new URLSearchParams(window.location.search);
+  let currentMonday = params.get('semana')
+    ? mondayOf(new Date(params.get('semana') + 'T00:00:00'))
+    : mondayOf(new Date());
+
+  function updatePeriodo() {
+    const end = new Date(currentMonday);
+    end.setDate(end.getDate() + 6);
+    document.getElementById('viz-periodo').textContent =
+      `${fmtDateBR(currentMonday)}  \u2014  ${fmtDateBR(end)}`;
+  }
+
+  function changeWeek(delta) {
+    currentMonday.setDate(currentMonday.getDate() + delta * 7);
+    loadData();
+  }
+
+  function goToday() {
+    currentMonday = mondayOf(new Date());
+    loadData();
+  }
+
+  async function loadData() {
+    updatePeriodo();
+
+    // Config
+    try {
+      const cfg = await api('/api/config');
+      document.getElementById('viz-empresa').textContent = cfg.empresa || '';
+      document.getElementById('viz-vessel').textContent = cfg.vessel || '';
+      document.getElementById('viz-project').textContent = cfg.project || '';
+      document.getElementById('viz-site').textContent = cfg.site || '';
+    } catch(e) {}
+
+    // Trechos
+    try {
+      const resp = await api(`/api/trechos?semana=${fmtDate(currentMonday)}`);
+      renderTable(resp.trechos);
+    } catch(e) {
+      document.getElementById('viz-body').innerHTML =
+        `<tr><td colspan="19" class="viz-empty">${e.message}</td></tr>`;
+    }
+  }
+
+  function renderTable(trechos) {
+    const tbody = document.getElementById('viz-body');
+    if (!trechos.length) {
+      tbody.innerHTML = '<tr><td colspan="19" class="viz-empty">Nenhum trecho nesta semana.</td></tr>';
+      return;
+    }
+
+    let lastDate = '';
+    let html = '';
+    for (const t of trechos) {
+      const newDay = t.data !== lastDate;
+      const dayClass = (newDay && lastDate) ? ' viz-day-sep' : '';
+      lastDate = t.data;
+      const sc = t.status === 'EN' ? 'viz-status-en' : 'viz-status-vz';
+
+      html += `<tr class="${dayClass}">`;
+      html += `<td class="viz-date">${newDay ? t.data + '<span class="viz-dow">' + diaSemana(t.data) + '</span>' : ''}</td>`;
+      html += `<td class="${sc}">${t.status}</td>`;
+      html += `<td>${t.amplitude}</td>`;
+      html += `<td style="font-weight:500">${t.inicio}</td>`;
+      html += `<td style="font-weight:500">${t.fim}</td>`;
+      html += `<td>${t.area || ''}</td>`;
+      html += `<td>${t.kp_inicio || ''}</td>`;
+      html += `<td>${t.kp_final || ''}</td>`;
+      html += `<td>${t.linha_de || ''}</td>`;
+      html += `<td>${t.linha_ate || ''}</td>`;
+      html += `<td>${t.sistema_dragagem || ''}</td>`;
+      html += `<td>${t.observacoes || ''}</td>`;
+      html += `<td>${t.dist_fundo || ''}</td>`;
+      html += `<td>${t.ang_tela || ''}</td>`;
+      html += `<td>${t.ang_nozzle || ''}</td>`;
+      html += `<td>${t.direcao || ''}</td>`;
+      html += `<td>${t.vel_frente || ''}</td>`;
+      html += `<td>${t.vel_re || ''}</td>`;
+      html += `<td>${t.consumo_diesel || ''}</td>`;
+      html += `</tr>`;
+    }
+    tbody.innerHTML = html;
+  }
+
+  loadData();
+</script>
+{% endblock %}

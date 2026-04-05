@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Configuracoes - Dragagem{% endblock %}
+
+{% block content %}
+
+<div class="card" style="max-width:620px">
+  <div class="card-header">Dados do Projeto</div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div class="field">
+      <label>Empresa</label>
+      <input type="text" id="cfg-empresa" style="width:100%">
+    </div>
+    <div class="flex gap-12">
+      <div class="field" style="flex:2">
+        <label>Vessel</label>
+        <input type="text" id="cfg-vessel" style="width:100%">
+      </div>
+      <div class="field" style="flex:1">
+        <label>Project</label>
+        <input type="text" id="cfg-project" style="width:100%">
+      </div>
+    </div>
+    <div class="field">
+      <label>Site</label>
+      <input type="text" id="cfg-site" style="width:100%">
+    </div>
+    <div style="margin-top:4px">
+      <button class="btn btn-primary" onclick="salvarConfig()">Salvar Configuracao</button>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="max-width:620px">
+  <div class="card-header">Valores Padrao Operacionais</div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div class="field">
+      <label>Sistema de Dragagem (x)</label>
+      <select id="pad-sistema" style="width:100%">
+        <option>EH</option><option>AE</option><option>AI</option>
+        <option>COR</option><option>CL</option><option>DS</option>
+        <option>JB</option><option>JL</option><option>RD</option>
+      </select>
+    </div>
+    <div class="flex gap-12">
+      <div class="field" style="flex:1">
+        <label>Dist. Fundo (m)</label>
+        <input type="text" id="pad-dist" style="width:100%">
+      </div>
+      <div class="field" style="flex:1">
+        <label>Angulo na Tela</label>
+        <input type="text" id="pad-tela" style="width:100%">
+      </div>
+      <div class="field" style="flex:1">
+        <label>Angulo no Nozzle</label>
+        <input type="text" id="pad-nozzle" style="width:100%">
+      </div>
+    </div>
+    <div class="flex gap-12">
+      <div class="field" style="flex:1">
+        <label>Direcao (xx)</label>
+        <input type="text" id="pad-dir" style="width:100%">
+      </div>
+      <div class="field" style="flex:1">
+        <label>Vel. Frente</label>
+        <input type="text" id="pad-velf" style="width:100%">
+      </div>
+      <div class="field" style="flex:1">
+        <label>Vel. Re</label>
+        <input type="text" id="pad-velr" style="width:100%">
+      </div>
+    </div>
+    <div class="field" style="max-width:200px">
+      <label>Consumo Diesel</label>
+      <input type="text" id="pad-diesel" style="width:100%">
+    </div>
+    <div style="margin-top:4px">
+      <button class="btn btn-accent" onclick="salvarPadroes()">Salvar Padroes</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function loadConfig() {
+    const cfg = await api('/api/config');
+    document.getElementById('cfg-empresa').value = cfg.empresa || '';
+    document.getElementById('cfg-vessel').value = cfg.vessel || '';
+    document.getElementById('cfg-project').value = cfg.project || '';
+    document.getElementById('cfg-site').value = cfg.site || '';
+  }
+
+  async function loadPadroes() {
+    const p = await api('/api/padroes');
+    document.getElementById('pad-sistema').value = p.sistema_dragagem || 'EH';
+    document.getElementById('pad-dist').value = p.dist_fundo || '';
+    document.getElementById('pad-tela').value = p.ang_tela || '';
+    document.getElementById('pad-nozzle').value = p.ang_nozzle || '';
+    document.getElementById('pad-dir').value = p.direcao || '';
+    document.getElementById('pad-velf').value = p.vel_frente || '';
+    document.getElementById('pad-velr').value = p.vel_re || '';
+    document.getElementById('pad-diesel').value = p.consumo_diesel || '';
+  }
+
+  async function salvarConfig() {
+    try {
+      await api('/api/config', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          empresa: document.getElementById('cfg-empresa').value,
+          vessel: document.getElementById('cfg-vessel').value,
+          project: document.getElementById('cfg-project').value,
+          site: document.getElementById('cfg-site').value,
+        }),
+      });
+      toast('Configuracao salva');
+    } catch(e) {
+      toast('Erro: ' + e.message, 'error');
+    }
+  }
+
+  async function salvarPadroes() {
+    try {
+      await api('/api/padroes', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          sistema_dragagem: document.getElementById('pad-sistema').value,
+          dist_fundo: document.getElementById('pad-dist').value,
+          ang_tela: document.getElementById('pad-tela').value,
+          ang_nozzle: document.getElementById('pad-nozzle').value,
+          direcao: document.getElementById('pad-dir').value,
+          vel_frente: document.getElementById('pad-velf').value,
+          vel_re: document.getElementById('pad-velr').value,
+          consumo_diesel: document.getElementById('pad-diesel').value,
+        }),
+      });
+      toast('Padroes salvos');
+    } catch(e) {
+      toast('Erro: ' + e.message, 'error');
+    }
+  }
+
+  loadConfig();
+  loadPadroes();
+</script>
+{% endblock %}

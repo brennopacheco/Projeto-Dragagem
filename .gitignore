@@ -1,0 +1,24 @@
+# Segredos
+.env
+
+# Banco de dados e uploads
+data/
+uploads/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Specs e melhorias (docs internos)
+SPEC.md
+MELHORIAS_V1.md
+MELHORIAS_V2.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,580 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<!-- ===== Info do Projeto ===== -->
+<div class="card flex items-center justify-between gap-16 flex-wrap" id="project-info">
+  <div class="flex gap-16 flex-wrap items-center">
+    <div class="field">
+      <label>Empresa</label>
+      <input type="text" id="cfg-empresa" class="input-lg" readonly style="background:#f6f8fc">
+    </div>
+    <div class="field">
+      <label>Vessel</label>
+      <input type="text" id="cfg-vessel" class="input-md" readonly style="background:#f6f8fc">
+    </div>
+    <div class="field">
+      <label>Project</label>
+      <input type="text" id="cfg-project" class="input-sm" readonly style="background:#f6f8fc">
+    </div>
+    <div class="field">
+      <label>Site</label>
+      <input type="text" id="cfg-site" class="input-md" readonly style="background:#f6f8fc">
+    </div>
+  </div>
+  <div class="flex gap-8">
+    <button class="btn btn-accent btn-sm" onclick="openImportModal()">Importar Tabua</button>
+  </div>
+</div>
+
+<!-- ===== Navegacao Semanal ===== -->
+<div class="card flex items-center justify-between">
+  <div class="week-nav">
+    <button class="btn btn-outline btn-sm" onclick="changeWeek(-1)">&larr; Anterior</button>
+    <span class="week-label" id="week-label">--</span>
+    <button class="btn btn-outline btn-sm" onclick="changeWeek(1)">Proxima &rarr;</button>
+    <button class="btn btn-secondary btn-sm" onclick="goToday()">Hoje</button>
+  </div>
+  <div class="flex gap-8">
+    <button class="btn btn-primary btn-sm" onclick="exportExcel()">Excel</button>
+    <button class="btn btn-primary btn-sm" onclick="exportPdf()">PDF</button>
+  </div>
+</div>
+
+<!-- ===== Banner Realocacoes ===== -->
+<div class="card realoc-banner" id="realoc-banner" style="display:none">
+  <span class="realoc-banner-icon">&#9888;</span>
+  <span id="realoc-banner-text" style="flex:1"></span>
+  <button class="realoc-banner-close" onclick="document.getElementById('realoc-banner').style.display='none'" title="Fechar">&#10005;</button>
+</div>
+
+<!-- ===== Valores Padrao ===== -->
+<div class="card defaults-bar">
+  <div class="flex items-center justify-between flex-wrap gap-8">
+    <div class="flex gap-12 flex-wrap items-center">
+      <span style="font-weight:700;font-size:11px;color:#193C89;text-transform:uppercase;letter-spacing:.4px">Valores Padrao</span>
+      <div class="field">
+        <label>Sistema (x)</label>
+        <select id="pad-sistema" style="width:65px">
+          <option>EH</option><option>AE</option><option>AI</option>
+          <option>COR</option><option>CL</option><option>DS</option>
+          <option>JB</option><option>JL</option><option>RD</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Dist. Fundo (m)</label>
+        <input type="text" id="pad-dist" class="input-sm">
+      </div>
+      <div class="field">
+        <label>Ang. Tela</label>
+        <input type="text" id="pad-tela" class="input-sm">
+      </div>
+      <div class="field">
+        <label>Ang. Nozzle</label>
+        <input type="text" id="pad-nozzle" class="input-sm">
+      </div>
+      <div class="field">
+        <label>Direcao (xx)</label>
+        <input type="text" id="pad-dir" class="input-sm">
+      </div>
+      <div class="field">
+        <label>Vel. Frente</label>
+        <input type="text" id="pad-velf" class="input-sm">
+      </div>
+      <div class="field">
+        <label>Vel. Re</label>
+        <input type="text" id="pad-velr" class="input-sm">
+      </div>
+      <div class="field">
+        <label>Consumo Diesel</label>
+        <input type="text" id="pad-diesel" class="input-sm">
+      </div>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn btn-secondary btn-sm" onclick="salvarPadroes()">Salvar</button>
+      <button class="btn btn-accent btn-sm" onclick="aplicarPadroes()">Aplicar na Semana</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Tabela Principal ===== -->
+<div style="display:flex;justify-content:flex-end;margin:0 16px 4px">
+  <button class="btn btn-danger btn-sm" onclick="limparSemana()">Limpar Tudo</button>
+</div>
+<div class="card" style="padding:10px">
+  <div class="tbl-wrap">
+    <table class="drag-table" id="main-table">
+      <thead>
+        <tr>
+          <th rowspan="2">Data</th>
+          <th colspan="2">Mare</th>
+          <th colspan="2">Hora</th>
+          <th rowspan="2">Area</th>
+          <th colspan="2">KP</th>
+          <th colspan="2">Linhas</th>
+          <th rowspan="2">Sistema<br>(x)</th>
+          <th rowspan="2">observações</th>
+          <th rowspan="2">Dist.<br>Fundo (m)</th>
+          <th colspan="2">Angulo</th>
+          <th rowspan="2">Dir.<br>(xx)</th>
+          <th colspan="2">Velocidade</th>
+          <th rowspan="2">Consumo<br>Diesel</th>
+        </tr>
+        <tr>
+          <th class="sub">Status</th>
+          <th class="sub">Ampl.</th>
+          <th class="sub">Inicio</th>
+          <th class="sub">Final</th>
+          <th class="sub">Inicio</th>
+          <th class="sub">Final</th>
+          <th class="sub">De</th>
+          <th class="sub">Ate</th>
+          <th class="sub">Na Tela</th>
+          <th class="sub">No Nozzle</th>
+          <th class="sub">P/ Frente</th>
+          <th class="sub">P/ Re</th>
+        </tr>
+      </thead>
+      <tbody id="tbl-body">
+        <tr><td colspan="19" style="padding:40px;color:#8a94a8">Carregando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== Legenda ===== -->
+<div class="legend">
+  <strong>(x)</strong> AE = Agitador Externo (dois tubos de 45&deg;); AI = Agitador Interno (dois tubos para cima);
+  COR = Corrente; CL = Curva Lateral; DS = Desagregador; EH = Erosion Head ou Mass Flow;
+  JB = Jet Bar; JL = Jato Lateral; RD = Reduction<br>
+  <strong>(xx)</strong> Direction of the bow
+</div>
+
+<!-- ===== Tooltip global (realocacoes) ===== -->
+<div class="realoc-tooltip" id="realoc-tip"></div>
+
+<!-- ===== Modal Importar ===== -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <h3>Importar Tabua de Mares (PDF)</h3>
+    <p style="font-size:12px;color:#5a6a8a;margin-bottom:16px">Selecione o PDF da tabua de mares DHN/HIDROMARES. Os dados existentes para o mesmo ano serao substituidos.</p>
+    <form id="import-form">
+      <input type="file" name="file" accept=".pdf" required style="margin-bottom:20px">
+      <div class="flex gap-8" style="justify-content:flex-end">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeImportModal()">Cancelar</button>
+        <button type="submit" class="btn btn-accent btn-sm" id="import-btn">Importar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // ---- State ----
+  let currentMonday = mondayOf(new Date());
+  let trechos = [];
+  let realocMap = {}; // trecho_id → {type: 'cancelled'|'shifted', info: {...}}
+
+  const AREAS = ['', 'TR1', 'TR2', 'TR3', 'Bacia', 'Berco I', 'Berco II'];
+  const SISTEMAS = ['', 'EH', 'AE', 'AI', 'COR', 'CL', 'DS', 'JB', 'JL', 'RD'];
+  const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+
+  // ---- KP Validation ----
+  const KP_RANGES = [
+    { min: 0, max: 50, areas: ['Berco I', 'Berco II'] },
+    { min: 50, max: 800, areas: ['Bacia'] },
+    { min: 800, max: 3000, areas: ['TR3'] },
+    { min: 3000, max: 4500, areas: ['TR2'] },
+    { min: 4500, max: 6000, areas: ['TR1'] },
+  ];
+
+  function getExpectedRange(area) {
+    for (const r of KP_RANGES) {
+      if (r.areas.includes(area)) return r;
+    }
+    return null;
+  }
+
+  function validateKp(trechoId) {
+    const t = trechos.find(x => x.id === trechoId);
+    if (!t) return;
+    const area = t.area || '';
+    const kpIni = t.kp_inicio || '';
+    const kpFin = t.kp_final || '';
+    const range = getExpectedRange(area);
+
+    const elIni = document.querySelector(`[data-kp="ini-${trechoId}"]`);
+    const elFin = document.querySelector(`[data-kp="fin-${trechoId}"]`);
+    if (!elIni || !elFin) return;
+
+    // Reset
+    elIni.classList.remove('kp-error');
+    elFin.classList.remove('kp-error');
+    elIni.title = '';
+    elFin.title = '';
+
+    if (!area || !range) return;
+    const msg = `KP fora do range esperado para ${area} (${range.min}-${range.max})`;
+
+    if (kpIni !== '') {
+      const v = parseFloat(kpIni);
+      if (!isNaN(v) && (v < range.min || v > range.max)) {
+        elIni.classList.add('kp-error');
+        elIni.title = msg;
+      }
+    }
+    if (kpFin !== '') {
+      const v = parseFloat(kpFin);
+      if (!isNaN(v) && (v < range.min || v > range.max)) {
+        elFin.classList.add('kp-error');
+        elFin.title = msg;
+      }
+    }
+  }
+
+  // ---- Helpers ----
+  function mondayOf(d) {
+    const dt = new Date(d);
+    const day = dt.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    dt.setDate(dt.getDate() + diff);
+    dt.setHours(0,0,0,0);
+    return dt;
+  }
+
+  function fmtDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const dd = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${dd}`;
+  }
+
+  function fmtDateBR(d) {
+    const dd = String(d.getDate()).padStart(2,'0');
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    return `${dd}/${m}/${d.getFullYear()}`;
+  }
+
+  function parseDateBR(s) {
+    const [dd,mm,yyyy] = s.split('/');
+    return new Date(parseInt(yyyy), parseInt(mm)-1, parseInt(dd));
+  }
+
+  function diaSemana(s) {
+    const d = parseDateBR(s);
+    return DIAS_SEMANA[d.getDay()];
+  }
+
+  function makeSelect(options, value, trechoId, field) {
+    const opts = options.map(o =>
+      `<option value="${o}"${o === (value||'') ? ' selected' : ''}>${o}</option>`
+    ).join('');
+    if (field === 'area') {
+      return `<select onchange="updateLocal(${trechoId},'area',this.value);validateKp(${trechoId});saveField(${trechoId},'area',this.value)">${opts}</select>`;
+    }
+    return `<select onchange="saveField(${trechoId},'${field}',this.value)">${opts}</select>`;
+  }
+
+  function makeInput(value, trechoId, field, width) {
+    const w = width ? `style="width:${width}px"` : '';
+    const isKp = field === 'kp_inicio' || field === 'kp_final';
+    const kpAttr = field === 'kp_inicio' ? ` data-kp="ini-${trechoId}"` :
+                   field === 'kp_final' ? ` data-kp="fin-${trechoId}"` : '';
+    const kpOnInput = isKp ? ` oninput="updateLocal(${trechoId},'${field}',this.value);validateKp(${trechoId})"` : '';
+    return `<input type="text" value="${value||''}" ${w}${kpAttr}${kpOnInput}
+      onchange="saveField(${trechoId},'${field}',this.value)"
+      onkeydown="if(event.key==='Enter'){this.blur()}">`;
+  }
+
+  // ---- Week Navigation ----
+  function updateWeekLabel() {
+    const end = new Date(currentMonday);
+    end.setDate(end.getDate() + 6);
+    document.getElementById('week-label').textContent =
+      `${fmtDateBR(currentMonday)}  -  ${fmtDateBR(end)}`;
+  }
+
+  function changeWeek(delta) {
+    currentMonday.setDate(currentMonday.getDate() + delta * 7);
+    loadTrechos();
+  }
+
+  function goToday() {
+    currentMonday = mondayOf(new Date());
+    loadTrechos();
+  }
+
+  // ---- Load Data ----
+  async function loadConfig() {
+    try {
+      const cfg = await api('/api/config');
+      document.getElementById('cfg-empresa').value = cfg.empresa || '';
+      document.getElementById('cfg-vessel').value = cfg.vessel || '';
+      document.getElementById('cfg-project').value = cfg.project || '';
+      document.getElementById('cfg-site').value = cfg.site || '';
+    } catch(e) {}
+  }
+
+  async function loadPadroes() {
+    try {
+      const p = await api('/api/padroes');
+      document.getElementById('pad-sistema').value = p.sistema_dragagem || 'EH';
+      document.getElementById('pad-dist').value = p.dist_fundo || '';
+      document.getElementById('pad-tela').value = p.ang_tela || '';
+      document.getElementById('pad-nozzle').value = p.ang_nozzle || '';
+      document.getElementById('pad-dir').value = p.direcao || '';
+      document.getElementById('pad-velf').value = p.vel_frente || '';
+      document.getElementById('pad-velr').value = p.vel_re || '';
+      document.getElementById('pad-diesel').value = p.consumo_diesel || '';
+    } catch(e) {}
+  }
+
+  async function loadTrechos() {
+    updateWeekLabel();
+    try {
+      const resp = await api(`/api/trechos?semana=${fmtDate(currentMonday)}`);
+      trechos = resp.trechos;
+      await loadRealocacoes();
+      renderTable();
+    } catch(e) {
+      document.getElementById('tbl-body').innerHTML =
+        `<tr><td colspan="19" style="padding:40px;color:#c62828">${e.message}</td></tr>`;
+    }
+  }
+
+  async function loadRealocacoes() {
+    realocMap = {};
+    const banner = document.getElementById('realoc-banner');
+    banner.style.display = 'none';
+    try {
+      const resp = await api(`/api/realocacoes?semana=${fmtDate(currentMonday)}`);
+      const realocs = resp.realocacoes || [];
+      if (!realocs.length) return;
+
+      let totalCancelled = 0;
+      let totalShifted = 0;
+
+      for (const r of realocs) {
+        totalCancelled++;
+        // The cancelled trecho
+        realocMap[r.trecho_cancelado_id] = {
+          type: 'cancelled',
+          status: r.status_afetado,
+          motivo: r.motivo,
+          data: r.realizado_em,
+          total: r.total_trechos_afetados,
+          origData: r.dados_originais[0] || {},
+        };
+        // Shifted trechos (all except the first in dados_originais)
+        for (let i = 1; i < r.dados_originais.length; i++) {
+          const d = r.dados_originais[i];
+          totalShifted++;
+          if (!realocMap[d.trecho_id]) {
+            realocMap[d.trecho_id] = {
+              type: 'shifted',
+              status: r.status_afetado,
+              motivo: r.motivo,
+              data: r.realizado_em,
+              cancelledTrechoData: r.dados_originais[0] || {},
+            };
+          }
+        }
+      }
+
+      banner.style.display = 'flex';
+      document.getElementById('realoc-banner-text').textContent =
+        `O comandante cancelou ${totalCancelled} trecho(s) nesta semana \u2014 ${totalShifted} trecho(s) foram deslocados`;
+    } catch(e) {}
+  }
+
+  // ---- Render Table ----
+  function renderTable() {
+    const tbody = document.getElementById('tbl-body');
+    if (!trechos.length) {
+      tbody.innerHTML = '<tr><td colspan="19" style="padding:40px;color:#8a94a8">Nenhum trecho nesta semana. Importe a tabua de mares primeiro.</td></tr>';
+      return;
+    }
+
+    let lastDate = '';
+    let html = '';
+    for (const t of trechos) {
+      const showDate = t.data !== lastDate;
+      lastDate = t.data;
+      const statusClass = t.status === 'EN' ? 'status-en' : 'status-vz';
+      const r = realocMap[t.id];
+      const rowClass = r ? (r.type === 'cancelled' ? 'row-cancelled' : 'row-shifted') : '';
+
+      // Build realoc indicator
+      let realocIcon = '';
+      if (r && r.type === 'cancelled') {
+        const orig = r.origData;
+        const tip = `Cancelado em ${r.data}\nEra: ${orig.area || '?'} (KP ${orig.kp_inicio || '?'}-${orig.kp_final || '?'})\nMotivo: ${r.motivo}\n${r.total} trecho(s) ${r.status} deslocados`;
+        realocIcon = `<span class="realoc-icon" data-tip="${tip.replace(/"/g,'&quot;')}">&#128683;</span> `;
+      } else if (r && r.type === 'shifted') {
+        const orig = r.cancelledTrechoData;
+        const tip = `Deslocado em ${r.data}\nTrecho cancelado: ${orig.area || '?'} ${orig.inicio || ''}-${orig.fim || ''}\nMotivo: ${r.motivo}`;
+        realocIcon = `<span class="realoc-icon" data-tip="${tip.replace(/"/g,'&quot;')}">&#128260;</span> `;
+      }
+
+      html += `<tr class="${rowClass}">`;
+      html += `<td style="font-weight:600;text-align:left;padding-left:10px">${realocIcon}${showDate ? t.data + ' <span style="color:#8a94a8;font-weight:400">' + diaSemana(t.data) + '</span>' : ''}</td>`;
+      html += `<td class="${statusClass}">${t.status}</td>`;
+      html += `<td>${t.amplitude}</td>`;
+      html += `<td style="font-weight:500">${t.inicio}</td>`;
+      html += `<td style="font-weight:500">${t.fim}</td>`;
+      html += `<td>${makeSelect(AREAS, t.area, t.id, 'area')}</td>`;
+      html += `<td>${makeInput(t.kp_inicio, t.id, 'kp_inicio', 50)}</td>`;
+      html += `<td>${makeInput(t.kp_final, t.id, 'kp_final', 50)}</td>`;
+      html += `<td>${makeInput(t.linha_de, t.id, 'linha_de', 50)}</td>`;
+      html += `<td>${makeInput(t.linha_ate, t.id, 'linha_ate', 50)}</td>`;
+      html += `<td>${makeSelect(SISTEMAS, t.sistema_dragagem, t.id, 'sistema_dragagem')}</td>`;
+      html += `<td>${makeInput(t.observacoes, t.id, 'observacoes', 100)}</td>`;
+      html += `<td>${makeInput(t.dist_fundo, t.id, 'dist_fundo', 65)}</td>`;
+      html += `<td>${makeInput(t.ang_tela, t.id, 'ang_tela', 45)}</td>`;
+      html += `<td>${makeInput(t.ang_nozzle, t.id, 'ang_nozzle', 50)}</td>`;
+      html += `<td>${makeInput(t.direcao, t.id, 'direcao', 50)}</td>`;
+      html += `<td>${makeInput(t.vel_frente, t.id, 'vel_frente', 45)}</td>`;
+      html += `<td>${makeInput(t.vel_re, t.id, 'vel_re', 45)}</td>`;
+      html += `<td>${makeInput(t.consumo_diesel, t.id, 'consumo_diesel', 45)}</td>`;
+      html += `</tr>`;
+    }
+    tbody.innerHTML = html;
+    // Validar KPs após renderizar
+    for (const t of trechos) validateKp(t.id);
+  }
+
+  // ---- Update local state (sync) ----
+  function updateLocal(trechoId, field, value) {
+    const t = trechos.find(x => x.id === trechoId);
+    if (t) t[field] = value;
+  }
+
+  // ---- Save Field ----
+  async function saveField(trechoId, field, value) {
+    updateLocal(trechoId, field, value);
+    try {
+      await api(`/api/programacao/${trechoId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({[field]: value}),
+      });
+    } catch(e) {
+      toast('Erro ao salvar: ' + e.message, 'error');
+    }
+  }
+
+  // ---- Padroes ----
+  async function salvarPadroes() {
+    try {
+      await api('/api/padroes', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          sistema_dragagem: document.getElementById('pad-sistema').value,
+          dist_fundo: document.getElementById('pad-dist').value,
+          ang_tela: document.getElementById('pad-tela').value,
+          ang_nozzle: document.getElementById('pad-nozzle').value,
+          direcao: document.getElementById('pad-dir').value,
+          vel_frente: document.getElementById('pad-velf').value,
+          vel_re: document.getElementById('pad-velr').value,
+          consumo_diesel: document.getElementById('pad-diesel').value,
+        }),
+      });
+      toast('Padroes salvos');
+    } catch(e) {
+      toast('Erro: ' + e.message, 'error');
+    }
+  }
+
+  async function aplicarPadroes() {
+    try {
+      const resp = await api('/api/aplicar-padroes', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({semana: fmtDate(currentMonday)}),
+      });
+      toast(resp.message);
+      loadTrechos();
+    } catch(e) {
+      toast('Erro: ' + e.message, 'error');
+    }
+  }
+
+  // ---- Limpar Semana ----
+  async function limparSemana() {
+    if (!confirm('Tem certeza que deseja limpar todos os dados operacionais desta semana?\n\nEsta ação não pode ser desfeita.')) return;
+    try {
+      const resp = await api('/api/limpar-semana', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({semana: fmtDate(currentMonday)}),
+      });
+      toast(resp.message);
+      loadTrechos();
+    } catch(e) {
+      toast('Erro: ' + e.message, 'error');
+    }
+  }
+
+  // ---- Import ----
+  function openImportModal() {
+    document.getElementById('import-modal').classList.add('active');
+  }
+  function closeImportModal() {
+    document.getElementById('import-modal').classList.remove('active');
+  }
+
+  document.getElementById('import-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('import-btn');
+    btn.disabled = true;
+    btn.textContent = 'Importando...';
+    try {
+      const formData = new FormData(e.target);
+      const resp = await fetch('/api/importar', {method: 'POST', body: formData});
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error);
+      toast(`${data.extremos} extremos, ${data.trechos} trechos importados`);
+      closeImportModal();
+      loadTrechos();
+    } catch(err) {
+      toast('Erro: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Importar';
+    }
+  });
+
+  // ---- Export ----
+  function exportExcel() {
+    window.location.href = `/api/exportar/excel?semana=${fmtDate(currentMonday)}`;
+  }
+  function exportPdf() {
+    window.location.href = `/api/exportar/pdf?semana=${fmtDate(currentMonday)}`;
+  }
+
+  // ---- Realoc tooltip (position: fixed) ----
+  const tipEl = document.getElementById('realoc-tip');
+  document.addEventListener('mouseenter', (e) => {
+    const icon = e.target.closest('.realoc-icon[data-tip]');
+    if (!icon) return;
+    const rect = icon.getBoundingClientRect();
+    tipEl.innerHTML = icon.dataset.tip.replace(/\n/g, '<br>');
+    tipEl.classList.add('visible');
+    tipEl.style.left = rect.left + 'px';
+    tipEl.style.top = (rect.top - tipEl.offsetHeight - 6) + 'px';
+  }, true);
+  document.addEventListener('mouseleave', (e) => {
+    if (e.target.closest('.realoc-icon[data-tip]')) {
+      tipEl.classList.remove('visible');
+    }
+  }, true);
+
+  // ---- Init ----
+  loadConfig();
+  loadPadroes();
+  loadTrechos();
+</script>
+{% endblock %}
