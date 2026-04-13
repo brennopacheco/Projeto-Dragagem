@@ -2,11 +2,10 @@
 
 Para cada par de extremos consecutivos (E1 → E2):
 - Determina status EN (enchente) ou VZ (vazante)
-- Calcula inicio_real/fim_real (±1h dos extremos)
-- Arredonda para grade de 30 min (com exceção de minutos iguais)
-- Garante mínimo de 4h de dragagem
-- Limita fim em 00:00
-- Calcula amplitude formatada
+- Inicio = arredondar_nearest_15min(E1 + 1h)
+- Fim    = inicio + 4h  (sempre exatamente 4 horas)
+- Fim cortado em 00:00 quando inicio < meia-noite e fim > meia-noite
+- Data do trecho = data do inicio arredondado
 """
 
 from __future__ import annotations
@@ -15,37 +14,21 @@ import math
 from datetime import datetime, timedelta
 
 
-def _round_up_30(t: datetime) -> datetime:
-    """Arredonda horário para CIMA na grade de 30 minutos.
-
-    07:14 → 07:30
-    07:30 → 07:30  (já está na grade)
-    07:31 → 08:00
-    23:51 → 00:00 (dia seguinte)
-    """
-    m = t.minute
-    s = t.second
-    if s == 0 and m % 30 == 0:
-        return t  # já na grade
-    # Próxima marca de 30 min
-    next_mark = (m // 30 + 1) * 30
-    delta = next_mark - m
-    result = t.replace(second=0, microsecond=0) + timedelta(minutes=delta)
-    return result
-
-
 def _round_nearest_15(t: datetime) -> datetime:
     """Arredonda horário para o múltiplo de 15 minutos mais próximo.
 
-    07:17 → 07:15
-    07:08 → 07:15
-    07:07 → 07:00
-    07:53 → 07:45
-    07:52 → 07:45
-    07:38 → 07:45
+    Regra: resto = minutos % 15
+      <= 7  → arredonda para baixo (slot anterior)
+      >= 8  → arredonda para cima (próximo slot)
+
+    Exemplos:
+      09:42 → 09:45  (resto=12, cima)
+      17:16 → 17:15  (resto=1, baixo)
+      18:14 → 18:15  (resto=14, cima)
+      12:06 → 12:00  (resto=6, baixo)
+      23:55 → 00:00  (resto=10, cima → passa meia-noite)
     """
     m = t.minute
-    # Marcas de 15 min: 0, 15, 30, 45, 60(=próxima hora)
     nearest = round(m / 15) * 15
     delta = nearest - m
     return t.replace(second=0, microsecond=0) + timedelta(minutes=delta)
@@ -92,62 +75,41 @@ def calcular_trechos(extremos: list[dict]) -> list[dict]:
         dt1 = datetime.strptime(f"{e1['data']} {e1['hora']}", "%d/%m/%Y %H:%M")
         dt2 = datetime.strptime(f"{e2['data']} {e2['hora']}", "%d/%m/%Y %H:%M")
 
-        # Status
-        if e2["mare"] > e1["mare"]:
-            status = "EN"
-        else:
-            status = "VZ"
+        # Status: EN (enchente) se maré sobe, VZ (vazante) se desce
+        status = "EN" if e2["mare"] > e1["mare"] else "VZ"
 
-        # Limites reais (sem arredondamento)
-        inicio_real_dt = dt1 + timedelta(hours=1)
-        fim_real_dt = dt2 - timedelta(hours=1)
+        # Início: E1 + 1h, arredondado para nearest 15min
+        inicio_arr = _round_nearest_15(dt1 + timedelta(hours=1))
 
-        inicio_real_str = inicio_real_dt.strftime("%H:%M")
-        fim_real_str = fim_real_dt.strftime("%H:%M")
+        # Fim: sempre exatamente início + 4h
+        fim_arr = inicio_arr + timedelta(hours=4)
 
-        # Indicador de cruzamento de dia (antes do arredondamento)
-        fim_dia_seguinte = "S" if fim_real_dt.date() > dt1.date() else "N"
-
-        # Arredondamento para grade de 30 min
-        min_inicio = inicio_real_dt.minute
-        min_fim = fim_real_dt.minute
-
-        if min_inicio == min_fim:
-            # Exceção: mesmos minutos → arredondar ao múltiplo de 15 mais próximo
-            inicio_arr = _round_nearest_15(inicio_real_dt)
-            fim_arr = _round_nearest_15(fim_real_dt)
-        else:
-            inicio_arr = _round_up_30(inicio_real_dt)
-            fim_arr = _round_up_30(fim_real_dt)
-
-        # Regra das 4 horas mínimas
-        diff = fim_arr - inicio_arr
-        if diff < timedelta(hours=4):
-            fim_arr = inicio_arr + timedelta(hours=4)
-
-        # Limite máximo: 00:00 do dia seguinte ao dia de E1
-        meia_noite = datetime.combine(dt1.date() + timedelta(days=1),
-                                      datetime.min.time())
-        if fim_arr > meia_noite:
+        # Limite de meia-noite: se início é antes de 00:00 do dia seguinte ao E1
+        # e fim ultrapassa, cortar fim em 00:00
+        meia_noite = datetime.combine(dt1.date() + timedelta(days=1), datetime.min.time())
+        if inicio_arr < meia_noite < fim_arr:
             fim_arr = meia_noite
 
-        # Formatar horários arredondados
-        inicio_str = inicio_arr.strftime("%H:%M")
-        fim_str = fim_arr.strftime("%H:%M")
+        # Data do trecho = data do início arredondado (não necessariamente data de E1)
+        data_trecho = inicio_arr.strftime("%d/%m/%Y")
+        mes = inicio_arr.month
+
+        # Indicador de fim no dia seguinte ao início (após corte)
+        fim_dia_seguinte = "S" if fim_arr.date() > inicio_arr.date() else "N"
+
+        # Horários reais (contexto, sem arredondamento)
+        inicio_real_str = (dt1 + timedelta(hours=1)).strftime("%H:%M")
+        fim_real_str = (inicio_arr + timedelta(hours=4)).strftime("%H:%M")  # fim sem corte
 
         # Amplitude formatada
         amplitude = _format_amplitude(e1["mare"], e2["mare"])
-
-        # Data do trecho = dia do E1
-        data_trecho = dt1.strftime("%d/%m/%Y")
-        mes = dt1.month
 
         trechos.append({
             "data": data_trecho,
             "status": status,
             "amplitude": amplitude,
-            "inicio": inicio_str,
-            "fim": fim_str,
+            "inicio": inicio_arr.strftime("%H:%M"),
+            "fim": fim_arr.strftime("%H:%M"),
             "inicio_real": inicio_real_str,
             "fim_real": fim_real_str,
             "fim_dia_seguinte": fim_dia_seguinte,
@@ -186,14 +148,14 @@ if __name__ == "__main__":
     for t in trechos[:10]:
         print(f"  {t['data']} {t['status']} amp={t['amplitude']}  "
               f"{t['inicio']}-{t['fim']}  "
-              f"(real {t['inicio_real']}-{t['fim_real']})  "
+              f"(real {t['inicio_real']})  "
               f"dia+1={t['fim_dia_seguinte']}")
 
     print("\nÚltimos 5 trechos:")
     for t in trechos[-5:]:
         print(f"  {t['data']} {t['status']} amp={t['amplitude']}  "
               f"{t['inicio']}-{t['fim']}  "
-              f"(real {t['inicio_real']}-{t['fim_real']})  "
+              f"(real {t['inicio_real']})  "
               f"dia+1={t['fim_dia_seguinte']}")
 
     # Estatísticas
@@ -201,3 +163,30 @@ if __name__ == "__main__":
     vz_count = sum(1 for t in trechos if t["status"] == "VZ")
     ds_count = sum(1 for t in trechos if t["fim_dia_seguinte"] == "S")
     print(f"\nEN: {en_count} | VZ: {vz_count} | Fim dia seguinte: {ds_count}")
+
+    # Validar casos de teste
+    print("\n=== Validando casos de teste ===")
+    test_cases = [
+        ("08:42", "09:45", "13:45"),
+        ("16:16", "17:15", "21:15"),
+        ("17:14", "18:15", "22:15"),
+        ("11:06", "12:00", "16:00"),
+        ("22:55", "00:00", "04:00"),
+        ("21:59", "23:00", "00:00"),
+        ("10:23", "11:30", "15:30"),
+        ("04:12", "05:15", "09:15"),
+    ]
+    base = datetime(2026, 4, 13)
+    for e1_hora, exp_inicio, exp_fim in test_cases:
+        h, m = int(e1_hora[:2]), int(e1_hora[3:])
+        dt1 = base.replace(hour=h, minute=m)
+        inicio_arr = _round_nearest_15(dt1 + timedelta(hours=1))
+        fim_arr = inicio_arr + timedelta(hours=4)
+        meia_noite = datetime.combine(dt1.date() + timedelta(days=1), datetime.min.time())
+        if inicio_arr < meia_noite < fim_arr:
+            fim_arr = meia_noite
+        got_inicio = inicio_arr.strftime("%H:%M")
+        got_fim = fim_arr.strftime("%H:%M")
+        ok = got_inicio == exp_inicio and got_fim == exp_fim
+        status_str = "OK" if ok else f"FALHOU (esperado {exp_inicio}-{exp_fim})"
+        print(f"  E1={e1_hora} → {got_inicio}-{got_fim}  {status_str}")

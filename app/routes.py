@@ -256,6 +256,83 @@ def api_importar():
 
 
 # ---------------------------------------------------------------------------
+# API — Reprocessamento de trechos
+# ---------------------------------------------------------------------------
+
+
+@bp.route("/api/admin/reprocessar-trechos", methods=["POST"])
+@requer_gerente
+def api_reprocessar_trechos():
+    """Recalcula todos os trechos do banco usando as regras atuais do processor.
+
+    Útil após correção de bugs no processamento.
+    Retorna contagem de trechos recalculados por tábua.
+    """
+    tabuas = TabuaMares.query.all()
+    if not tabuas:
+        return jsonify({"message": "Nenhuma tábua encontrada no banco."}), 404
+
+    resultados = []
+    total_novos = 0
+
+    for tabua in tabuas:
+        # Buscar extremos da tábua
+        extremos_db = (
+            Extremo.query
+            .filter_by(tabua_id=tabua.id)
+            .order_by(Extremo.data, Extremo.hora)
+            .all()
+        )
+        extremos = [
+            {
+                "data": e.data.strftime("%d/%m/%Y"),
+                "hora": e.hora,
+                "mare": e.altura_m,
+            }
+            for e in extremos_db
+        ]
+
+        # Remover trechos antigos
+        Trecho.query.filter_by(tabua_id=tabua.id).delete()
+
+        # Calcular e salvar novos trechos
+        trechos_data = calcular_trechos(extremos)
+        for t in trechos_data:
+            d = datetime.strptime(t["data"], "%d/%m/%Y").date()
+            db.session.add(Trecho(
+                tabua_id=tabua.id,
+                data=d,
+                status=t["status"],
+                amplitude=t["amplitude"],
+                inicio=t["inicio"],
+                fim=t["fim"],
+                inicio_real=t["inicio_real"],
+                fim_real=t["fim_real"],
+                fim_dia_seguinte=t["fim_dia_seguinte"],
+                e1_hora=t["e1_hora"],
+                e1_mare=t["e1_mare"],
+                e2_hora=t["e2_hora"],
+                e2_mare=t["e2_mare"],
+                mes=t["mes"],
+            ))
+
+        total_novos += len(trechos_data)
+        resultados.append({
+            "ano": tabua.ano,
+            "local": tabua.local,
+            "extremos": len(extremos),
+            "trechos": len(trechos_data),
+        })
+
+    db.session.commit()
+
+    return jsonify({
+        "message": f"Reprocessamento concluído: {total_novos} trechos recalculados.",
+        "tabuas": resultados,
+    })
+
+
+# ---------------------------------------------------------------------------
 # API — Trechos da semana
 # ---------------------------------------------------------------------------
 
