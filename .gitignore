@@ -1,5 +1,6 @@
 # Segredos
 .env
+.gitignore
 
 # Banco de dados e uploads
 data/
@@ -14,6 +15,7 @@ __pycache__/
 SPEC.md
 MELHORIAS_V1.md
 MELHORIAS_V2.md
+CORRECAO_PROCESSAMENTO.md
 
 # IDE
 .vscode/
