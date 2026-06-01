@@ -1,5 +1,7 @@
 """Flask app factory."""
 
+import sys
+
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
@@ -19,6 +21,11 @@ def create_app():
         from app import models  # noqa: F401
         from app.routes import bp
         app.register_blueprint(bp)
-        db.create_all()
+        try:
+            db.create_all()
+            print("Tabelas criadas/verificadas com sucesso")
+        except Exception as e:
+            print(f"ERRO ao criar tabelas: {e}", file=sys.stderr)
+            raise
 
     return app
