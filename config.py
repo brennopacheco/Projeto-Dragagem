@@ -11,7 +11,14 @@ load_dotenv(BASE_DIR / ".env")
 
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY")
-    SQLALCHEMY_DATABASE_URI = f"sqlite:///{BASE_DIR / 'data' / 'dragagem.db'}"
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        # SQLAlchemy moderno exige postgresql:// (não postgres://)
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+        SQLALCHEMY_DATABASE_URI = database_url
+    else:
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{BASE_DIR / 'data' / 'dragagem.db'}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = str(BASE_DIR / "uploads")
 
