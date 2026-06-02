@@ -23,7 +23,7 @@ from werkzeug.utils import secure_filename
 
 import json
 
-from sqlalchemy import insert
+from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
 from app import db
@@ -174,24 +174,56 @@ def visualizar_page():
 # ---------------------------------------------------------------------------
 
 
-_IMPORT_CHUNK = 100
+_EXTREMO_BATCH = 200
+_TRECHO_BATCH = 100
 _IMPORT_MAX_RETRIES = 3
 _IMPORT_RETRY_WAIT = 2  # segundos entre tentativas
+
+
+def _delete_tabua_do_ano(ano):
+    """Remove a tábua do ano e seus dependentes via DELETE em massa.
+
+    NÃO usa session.delete + cascade ORM, que carregaria milhares de
+    extremos/trechos/programações na sessão só para apagá-los — gatilho de OOM
+    no Render Free (256 MB). A ordem respeita as FKs, então funciona com FK
+    enforced (Postgres): realocações -> SET NULL, depois programação, trechos,
+    extremos e a própria tábua.
+    """
+    tabua_id = db.session.scalar(select(TabuaMares.id).where(TabuaMares.ano == ano))
+    if tabua_id is None:
+        return
+
+    trecho_ids = (
+        select(Trecho.id).where(Trecho.tabua_id == tabua_id).scalar_subquery()
+    )
+
+    # Desvincula o histórico de realocações (FK agora nullable -> SET NULL)
+    Realocacao.query.filter(
+        Realocacao.trecho_cancelado_id.in_(trecho_ids)
+    ).update({"trecho_cancelado_id": None}, synchronize_session=False)
+
+    # Apaga em ordem segura de FK
+    Programacao.query.filter(
+        Programacao.trecho_id.in_(trecho_ids)
+    ).delete(synchronize_session=False)
+    Trecho.query.filter(Trecho.tabua_id == tabua_id).delete(synchronize_session=False)
+    Extremo.query.filter(Extremo.tabua_id == tabua_id).delete(synchronize_session=False)
+    TabuaMares.query.filter(TabuaMares.id == tabua_id).delete(synchronize_session=False)
+    db.session.flush()
 
 
 def _persist_import(ano, meta, filename, extremo_maps, trecho_maps):
     """Grava a importação numa transação (substitui a tábua do ano).
 
-    Idempotente para retentativas: re-consulta a tábua existente e reatribui
-    o tabua_id aos maps a cada chamada. Pode levantar OperationalError em
-    queda de conexão — o chamador trata com retry.
+    Idempotente para retentativas: apaga a tábua do ano e reatribui o tabua_id
+    aos maps a cada chamada. Insere em lotes com expunge_all() para manter a
+    sessão (e a memória) enxutas. Pode levantar OperationalError em queda de
+    conexão — o chamador trata com retry.
     """
-    existing = TabuaMares.query.filter_by(ano=ano).first()
-    if existing:
-        # cascade deleta extremos/trechos/programação; realocações -> SET NULL
-        db.session.delete(existing)
-        db.session.flush()
+    # 1) Remove dados antigos ANTES de inserir os novos (economiza memória)
+    _delete_tabua_do_ano(ano)
 
+    # 2) Cria a nova tábua e captura o id (depois solta o objeto da sessão)
     tabua = TabuaMares(
         ano=ano,
         local=meta.get("local"),
@@ -204,22 +236,24 @@ def _persist_import(ano, meta, filename, extremo_maps, trecho_maps):
     )
     db.session.add(tabua)
     db.session.flush()  # gera tabua.id
+    tabua_id = tabua.id
+    db.session.expunge(tabua)
 
     for m in extremo_maps:
-        m["tabua_id"] = tabua.id
+        m["tabua_id"] = tabua_id
     for m in trecho_maps:
-        m["tabua_id"] = tabua.id
+        m["tabua_id"] = tabua_id
 
-    # Bulk insert em chunks — evita objetos ORM pesados na sessão
-    for i in range(0, len(extremo_maps), _IMPORT_CHUNK):
-        db.session.execute(insert(Extremo), extremo_maps[i:i + _IMPORT_CHUNK])
+    # 3) Insere em lotes; expunge_all() após cada flush evita acúmulo na sessão
+    for i in range(0, len(extremo_maps), _EXTREMO_BATCH):
+        db.session.bulk_insert_mappings(Extremo, extremo_maps[i:i + _EXTREMO_BATCH])
         db.session.flush()
-        gc.collect()
+        db.session.expunge_all()
 
-    for i in range(0, len(trecho_maps), _IMPORT_CHUNK):
-        db.session.execute(insert(Trecho), trecho_maps[i:i + _IMPORT_CHUNK])
+    for i in range(0, len(trecho_maps), _TRECHO_BATCH):
+        db.session.bulk_insert_mappings(Trecho, trecho_maps[i:i + _TRECHO_BATCH])
         db.session.flush()
-        gc.collect()
+        db.session.expunge_all()
 
     db.session.commit()
 
@@ -286,6 +320,7 @@ def api_importar():
             for t in trechos_data
         ]
         del trechos_data
+        gc.collect()  # solta as listas grandes antes da fase de inserção
 
         # Persistir com retry — perda de conexão (Supabase) = OperationalError
         last_err = None
