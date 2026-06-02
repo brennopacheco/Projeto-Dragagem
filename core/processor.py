@@ -1,6 +1,6 @@
 """core/processor.py — Calcula trechos de dragagem EN/VZ a partir dos extremos.
 
-Para cada par de extremos consecutivos (E1 → E2):
+Para cada par de extremos consecutivos (E1 -> E2):
 - Determina status EN (enchente) ou VZ (vazante)
 - Inicio = arredondar_nearest_15min(E1 + 1h)
 - Fim    = inicio + 4h  (sempre exatamente 4 horas)
@@ -18,15 +18,15 @@ def _round_nearest_15(t: datetime) -> datetime:
     """Arredonda horário para o múltiplo de 15 minutos mais próximo.
 
     Regra: resto = minutos % 15
-      <= 7  → arredonda para baixo (slot anterior)
-      >= 8  → arredonda para cima (próximo slot)
+      <= 7  -> arredonda para baixo (slot anterior)
+      >= 8  -> arredonda para cima (próximo slot)
 
     Exemplos:
-      09:42 → 09:45  (resto=12, cima)
-      17:16 → 17:15  (resto=1, baixo)
-      18:14 → 18:15  (resto=14, cima)
-      12:06 → 12:00  (resto=6, baixo)
-      23:55 → 00:00  (resto=10, cima → passa meia-noite)
+      09:42 -> 09:45  (resto=12, cima)
+      17:16 -> 17:15  (resto=1, baixo)
+      18:14 -> 18:15  (resto=14, cima)
+      12:06 -> 12:00  (resto=6, baixo)
+      23:55 -> 00:00  (resto=10, cima -> passa meia-noite)
     """
     m = t.minute
     nearest = round(m / 15) * 15
@@ -39,7 +39,7 @@ def _format_amplitude(mare_e1: float, mare_e2: float) -> str:
 
     abs(mare_E2 - mare_E1), arredondado para 1 casa decimal (half-up),
     exibido com 2 casas forçando a segunda como zero.
-    Ex: 4.94 → "4.90", 5.58 → "5.60", 4.55 → "4.60"
+    Ex: 4.94 -> "4.90", 5.58 -> "5.60", 4.55 -> "4.60"
     """
     raw = abs(mare_e2 - mare_e1)
     # Arredondamento half-up para 1 casa decimal
@@ -84,9 +84,14 @@ def calcular_trechos(extremos: list[dict]) -> list[dict]:
         # Fim: sempre exatamente início + 4h
         fim_arr = inicio_arr + timedelta(hours=4)
 
-        # Limite de meia-noite: se início é antes de 00:00 do dia seguinte ao E1
-        # e fim ultrapassa, cortar fim em 00:00
+        # Limite de meia-noite: 00:00 do dia seguinte ao E1
         meia_noite = datetime.combine(dt1.date() + timedelta(days=1), datetime.min.time())
+
+        # Trecho inválido: início já caiu na ou após a meia-noite -> descartar
+        if inicio_arr >= meia_noite:
+            continue
+
+        # Início antes da meia-noite mas fim ultrapassa -> cortar fim em 00:00
         if inicio_arr < meia_noite < fim_arr:
             fim_arr = meia_noite
 
@@ -165,16 +170,18 @@ if __name__ == "__main__":
     print(f"\nEN: {en_count} | VZ: {vz_count} | Fim dia seguinte: {ds_count}")
 
     # Validar casos de teste
+    # exp_inicio=None significa que o trecho deve ser DESCARTADO (inicio >= meia-noite)
     print("\n=== Validando casos de teste ===")
     test_cases = [
-        ("08:42", "09:45", "13:45"),
-        ("16:16", "17:15", "21:15"),
-        ("17:14", "18:15", "22:15"),
-        ("11:06", "12:00", "16:00"),
-        ("22:55", "00:00", "04:00"),
-        ("21:59", "23:00", "00:00"),
-        ("10:23", "11:30", "15:30"),
-        ("04:12", "05:15", "09:15"),
+        ("08:42", "09:45", "13:45"),   # normal
+        ("16:16", "17:15", "21:15"),   # normal
+        ("17:14", "18:15", "22:15"),   # normal
+        ("11:06", "12:00", "16:00"),   # normal
+        ("22:55", None,    None),       # DESCARTADO: 23:55 -> arredonda 00:00 = meia-noite
+        ("23:16", None,    None),       # DESCARTADO: 00:16 -> arredonda 00:15 > meia-noite
+        ("21:59", "23:00", "00:00"),   # corte em 00:00 (inicio < meia-noite)
+        ("10:23", "11:30", "15:30"),   # normal
+        ("04:12", "05:15", "09:15"),   # normal
     ]
     base = datetime(2026, 4, 13)
     for e1_hora, exp_inicio, exp_fim in test_cases:
@@ -183,10 +190,16 @@ if __name__ == "__main__":
         inicio_arr = _round_nearest_15(dt1 + timedelta(hours=1))
         fim_arr = inicio_arr + timedelta(hours=4)
         meia_noite = datetime.combine(dt1.date() + timedelta(days=1), datetime.min.time())
-        if inicio_arr < meia_noite < fim_arr:
+        descartado = inicio_arr >= meia_noite
+        if not descartado and inicio_arr < meia_noite < fim_arr:
             fim_arr = meia_noite
-        got_inicio = inicio_arr.strftime("%H:%M")
-        got_fim = fim_arr.strftime("%H:%M")
-        ok = got_inicio == exp_inicio and got_fim == exp_fim
-        status_str = "OK" if ok else f"FALHOU (esperado {exp_inicio}-{exp_fim})"
-        print(f"  E1={e1_hora} → {got_inicio}-{got_fim}  {status_str}")
+        if exp_inicio is None:
+            ok = descartado
+            status_str = "OK (descartado)" if ok else f"FALHOU (esperado descartar, mas gerou {inicio_arr.strftime('%H:%M')}-{fim_arr.strftime('%H:%M')})"
+            print(f"  E1={e1_hora} -> DESCARTADO  {status_str}")
+        else:
+            got_inicio = inicio_arr.strftime("%H:%M")
+            got_fim = fim_arr.strftime("%H:%M")
+            ok = got_inicio == exp_inicio and got_fim == exp_fim
+            status_str = "OK" if ok else f"FALHOU (esperado {exp_inicio}-{exp_fim})"
+            print(f"  E1={e1_hora} -> {got_inicio}-{got_fim}  {status_str}")
