@@ -40,6 +40,13 @@
       if (!resp.ok) throw new Error(data.error || 'Erro');
       return data;
     }
+
+    // Escapa texto vindo do banco antes de injetar via innerHTML (anti-XSS)
+    function escHtml(v) {
+      return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
   </script>
   {% block scripts %}{% endblock %}
 </body>

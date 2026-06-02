@@ -269,20 +269,20 @@
       html += `<td>${t.amplitude}</td>`;
       html += `<td style="font-weight:500">${t.inicio}</td>`;
       html += `<td style="font-weight:500">${t.fim}</td>`;
-      html += `<td>${t.area || ''}</td>`;
-      html += `<td>${t.kp_inicio || ''}</td>`;
-      html += `<td>${t.kp_final || ''}</td>`;
-      html += `<td>${t.linha_de || ''}</td>`;
-      html += `<td>${t.linha_ate || ''}</td>`;
-      html += `<td>${t.sistema_dragagem || ''}</td>`;
-      html += `<td>${t.observacoes || ''}</td>`;
-      html += `<td>${t.dist_fundo || ''}</td>`;
-      html += `<td>${t.ang_tela || ''}</td>`;
-      html += `<td>${t.ang_nozzle || ''}</td>`;
-      html += `<td>${t.direcao || ''}</td>`;
-      html += `<td>${t.vel_frente || ''}</td>`;
-      html += `<td>${t.vel_re || ''}</td>`;
-      html += `<td>${t.consumo_diesel || ''}</td>`;
+      html += `<td>${escHtml(t.area)}</td>`;
+      html += `<td>${escHtml(t.kp_inicio)}</td>`;
+      html += `<td>${escHtml(t.kp_final)}</td>`;
+      html += `<td>${escHtml(t.linha_de)}</td>`;
+      html += `<td>${escHtml(t.linha_ate)}</td>`;
+      html += `<td>${escHtml(t.sistema_dragagem)}</td>`;
+      html += `<td>${escHtml(t.observacoes)}</td>`;
+      html += `<td>${escHtml(t.dist_fundo)}</td>`;
+      html += `<td>${escHtml(t.ang_tela)}</td>`;
+      html += `<td>${escHtml(t.ang_nozzle)}</td>`;
+      html += `<td>${escHtml(t.direcao)}</td>`;
+      html += `<td>${escHtml(t.vel_frente)}</td>`;
+      html += `<td>${escHtml(t.vel_re)}</td>`;
+      html += `<td>${escHtml(t.consumo_diesel)}</td>`;
       html += `</tr>`;
     }
     tbody.innerHTML = html;
@@ -300,7 +300,7 @@
     const affectedThisWeek = sameStatus.length - idx;
 
     document.getElementById('cancel-summary').innerHTML =
-      `Cancelar <strong>${t.status} ${t.inicio}-${t.fim}</strong> (${t.area || 'sem area'}) do dia <strong>${t.data}</strong>`;
+      `Cancelar <strong>${t.status} ${t.inicio}-${t.fim}</strong> (${escHtml(t.area) || 'sem area'}) do dia <strong>${t.data}</strong>`;
 
     document.getElementById('cancel-warning').innerHTML =
       `Todos os trechos <strong>${t.status}</strong> seguintes serao deslocados uma posicao pra frente.<br>` +

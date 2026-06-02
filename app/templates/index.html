@@ -283,7 +283,7 @@
     const kpAttr = field === 'kp_inicio' ? ` data-kp="ini-${trechoId}"` :
                    field === 'kp_final' ? ` data-kp="fin-${trechoId}"` : '';
     const kpOnInput = isKp ? ` oninput="updateLocal(${trechoId},'${field}',this.value);validateKp(${trechoId})"` : '';
-    return `<input type="text" value="${value||''}" ${w}${kpAttr}${kpOnInput}
+    return `<input type="text" value="${escHtml(value)}" ${w}${kpAttr}${kpOnInput}
       onchange="saveField(${trechoId},'${field}',this.value)"
       onkeydown="if(event.key==='Enter'){this.blur()}">`;
   }
@@ -411,11 +411,11 @@
       if (r && r.type === 'cancelled') {
         const orig = r.origData;
         const tip = `Cancelado em ${r.data}\nEra: ${orig.area || '?'} (KP ${orig.kp_inicio || '?'}-${orig.kp_final || '?'})\nMotivo: ${r.motivo}\n${r.total} trecho(s) ${r.status} deslocados`;
-        realocIcon = `<span class="realoc-icon" data-tip="${tip.replace(/"/g,'&quot;')}">&#128683;</span> `;
+        realocIcon = `<span class="realoc-icon" data-tip="${escHtml(tip)}">&#128683;</span> `;
       } else if (r && r.type === 'shifted') {
         const orig = r.cancelledTrechoData;
         const tip = `Deslocado em ${r.data}\nTrecho cancelado: ${orig.area || '?'} ${orig.inicio || ''}-${orig.fim || ''}\nMotivo: ${r.motivo}`;
-        realocIcon = `<span class="realoc-icon" data-tip="${tip.replace(/"/g,'&quot;')}">&#128260;</span> `;
+        realocIcon = `<span class="realoc-icon" data-tip="${escHtml(tip)}">&#128260;</span> `;
       }
 
       html += `<tr class="${rowClass}">`;
@@ -561,7 +561,7 @@
     const icon = e.target.closest('.realoc-icon[data-tip]');
     if (!icon) return;
     const rect = icon.getBoundingClientRect();
-    tipEl.innerHTML = icon.dataset.tip.replace(/\n/g, '<br>');
+    tipEl.innerHTML = escHtml(icon.dataset.tip).replace(/\n/g, '<br>');
     tipEl.classList.add('visible');
     tipEl.style.left = rect.left + 'px';
     tipEl.style.top = (rect.top - tipEl.offsetHeight - 6) + 'px';
