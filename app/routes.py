@@ -1,5 +1,7 @@
 """app/routes.py — Rotas da API e páginas."""
 
+import gc
+import tempfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -19,6 +21,8 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 import json
+
+from sqlalchemy import insert
 
 from app import db
 from app.models import (
@@ -168,10 +172,13 @@ def visualizar_page():
 # ---------------------------------------------------------------------------
 
 
+_IMPORT_CHUNK = 100
+
+
 @bp.route("/api/importar", methods=["POST"])
 @requer_gerente
 def api_importar():
-    """Upload PDF da tábua → extrai + processa + salva no banco."""
+    """Upload PDF da tábua → extrai + processa + salva no banco em chunks."""
     if "file" not in request.files:
         return jsonify({"error": "Nenhum arquivo enviado"}), 400
 
@@ -179,17 +186,16 @@ def api_importar():
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         return jsonify({"error": "Arquivo deve ser PDF"}), 400
 
-    # Salvar PDF
-    upload_dir = Path(current_app.config["UPLOAD_FOLDER"])
-    upload_dir.mkdir(exist_ok=True)
+    # Salvar PDF em /tmp (sem manter em memória)
     filename = secure_filename(file.filename)
-    filepath = upload_dir / filename
+    filepath = Path(tempfile.gettempdir()) / filename
     file.save(str(filepath))
 
     # Extrair metadados e extremos
     meta = extract_metadata(filepath)
     extremos = extract_extremos(filepath)
     warnings = validate_extremos(extremos)
+    n_extremos = len(extremos)
 
     # Verificar se já existe tábua para este ano
     ano = meta.get("ano", datetime.today().year)
@@ -213,44 +219,62 @@ def api_importar():
     db.session.add(tabua)
     db.session.flush()  # gera tabua.id
 
-    # Salvar extremos
-    for e in extremos:
-        d = datetime.strptime(e["data"], "%d/%m/%Y").date()
-        db.session.add(Extremo(
-            tabua_id=tabua.id,
-            data=d,
-            hora=e["hora"],
-            altura_m=e["mare"],
-        ))
+    # Salvar extremos em chunks — bulk insert evita objetos ORM pesados na sessão
+    extremo_maps = [
+        {
+            "tabua_id": tabua.id,
+            "data": datetime.strptime(e["data"], "%d/%m/%Y").date(),
+            "hora": e["hora"],
+            "altura_m": e["mare"],
+        }
+        for e in extremos
+    ]
+    for i in range(0, len(extremo_maps), _IMPORT_CHUNK):
+        db.session.execute(insert(Extremo), extremo_maps[i:i + _IMPORT_CHUNK])
+        db.session.flush()
+        gc.collect()
+    del extremo_maps
 
-    # Calcular e salvar trechos
+    # Calcular trechos e liberar lista de extremos
     trechos_data = calcular_trechos(extremos)
-    for t in trechos_data:
-        d = datetime.strptime(t["data"], "%d/%m/%Y").date()
-        db.session.add(Trecho(
-            tabua_id=tabua.id,
-            data=d,
-            status=t["status"],
-            amplitude=t["amplitude"],
-            inicio=t["inicio"],
-            fim=t["fim"],
-            inicio_real=t["inicio_real"],
-            fim_real=t["fim_real"],
-            fim_dia_seguinte=t["fim_dia_seguinte"],
-            e1_hora=t["e1_hora"],
-            e1_mare=t["e1_mare"],
-            e2_hora=t["e2_hora"],
-            e2_mare=t["e2_mare"],
-            mes=t["mes"],
-        ))
+    del extremos
+    n_trechos = len(trechos_data)
+
+    # Salvar trechos em chunks
+    trecho_maps = [
+        {
+            "tabua_id": tabua.id,
+            "data": datetime.strptime(t["data"], "%d/%m/%Y").date(),
+            "status": t["status"],
+            "amplitude": t["amplitude"],
+            "inicio": t["inicio"],
+            "fim": t["fim"],
+            "inicio_real": t["inicio_real"],
+            "fim_real": t["fim_real"],
+            "fim_dia_seguinte": t["fim_dia_seguinte"],
+            "e1_hora": t["e1_hora"],
+            "e1_mare": t["e1_mare"],
+            "e2_hora": t["e2_hora"],
+            "e2_mare": t["e2_mare"],
+            "mes": t["mes"],
+        }
+        for t in trechos_data
+    ]
+    del trechos_data
+
+    for i in range(0, len(trecho_maps), _IMPORT_CHUNK):
+        db.session.execute(insert(Trecho), trecho_maps[i:i + _IMPORT_CHUNK])
+        db.session.flush()
+        gc.collect()
+    del trecho_maps
 
     db.session.commit()
 
     return jsonify({
-        "message": f"Importado: {len(extremos)} extremos, {len(trechos_data)} trechos",
+        "message": f"Importado: {n_extremos} extremos, {n_trechos} trechos",
         "ano": ano,
-        "extremos": len(extremos),
-        "trechos": len(trechos_data),
+        "extremos": n_extremos,
+        "trechos": n_trechos,
         "avisos": warnings,
     })
 
