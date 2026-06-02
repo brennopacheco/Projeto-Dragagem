@@ -20,6 +20,10 @@ class Config:
     else:
         SQLALCHEMY_DATABASE_URI = f"sqlite:///{BASE_DIR / 'data' / 'dragagem.db'}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+    }
     UPLOAD_FOLDER = str(BASE_DIR / "uploads")
 
     # Senhas de acesso (obrigatórias via .env)
