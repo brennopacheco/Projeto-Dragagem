@@ -2,6 +2,7 @@
 
 import gc
 import tempfile
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from werkzeug.utils import secure_filename
 import json
 
 from sqlalchemy import insert
+from sqlalchemy.exc import OperationalError
 
 from app import db
 from app.models import (
@@ -173,39 +175,23 @@ def visualizar_page():
 
 
 _IMPORT_CHUNK = 100
+_IMPORT_MAX_RETRIES = 3
+_IMPORT_RETRY_WAIT = 2  # segundos entre tentativas
 
 
-@bp.route("/api/importar", methods=["POST"])
-@requer_gerente
-def api_importar():
-    """Upload PDF da tábua → extrai + processa + salva no banco em chunks."""
-    if "file" not in request.files:
-        return jsonify({"error": "Nenhum arquivo enviado"}), 400
+def _persist_import(ano, meta, filename, extremo_maps, trecho_maps):
+    """Grava a importação numa transação (substitui a tábua do ano).
 
-    file = request.files["file"]
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "Arquivo deve ser PDF"}), 400
-
-    # Salvar PDF em /tmp (sem manter em memória)
-    filename = secure_filename(file.filename)
-    filepath = Path(tempfile.gettempdir()) / filename
-    file.save(str(filepath))
-
-    # Extrair metadados e extremos
-    meta = extract_metadata(filepath)
-    extremos = extract_extremos(filepath)
-    warnings = validate_extremos(extremos)
-    n_extremos = len(extremos)
-
-    # Verificar se já existe tábua para este ano
-    ano = meta.get("ano", datetime.today().year)
+    Idempotente para retentativas: re-consulta a tábua existente e reatribui
+    o tabua_id aos maps a cada chamada. Pode levantar OperationalError em
+    queda de conexão — o chamador trata com retry.
+    """
     existing = TabuaMares.query.filter_by(ano=ano).first()
     if existing:
-        # Remover dados antigos (cascade deleta extremos, trechos, programação)
+        # cascade deleta extremos/trechos/programação; realocações -> SET NULL
         db.session.delete(existing)
         db.session.flush()
 
-    # Salvar tábua
     tabua = TabuaMares(
         ano=ano,
         local=meta.get("local"),
@@ -219,64 +205,122 @@ def api_importar():
     db.session.add(tabua)
     db.session.flush()  # gera tabua.id
 
-    # Salvar extremos em chunks — bulk insert evita objetos ORM pesados na sessão
-    extremo_maps = [
-        {
-            "tabua_id": tabua.id,
-            "data": datetime.strptime(e["data"], "%d/%m/%Y").date(),
-            "hora": e["hora"],
-            "altura_m": e["mare"],
-        }
-        for e in extremos
-    ]
+    for m in extremo_maps:
+        m["tabua_id"] = tabua.id
+    for m in trecho_maps:
+        m["tabua_id"] = tabua.id
+
+    # Bulk insert em chunks — evita objetos ORM pesados na sessão
     for i in range(0, len(extremo_maps), _IMPORT_CHUNK):
         db.session.execute(insert(Extremo), extremo_maps[i:i + _IMPORT_CHUNK])
         db.session.flush()
         gc.collect()
-    del extremo_maps
-
-    # Calcular trechos e liberar lista de extremos
-    trechos_data = calcular_trechos(extremos)
-    del extremos
-    n_trechos = len(trechos_data)
-
-    # Salvar trechos em chunks
-    trecho_maps = [
-        {
-            "tabua_id": tabua.id,
-            "data": datetime.strptime(t["data"], "%d/%m/%Y").date(),
-            "status": t["status"],
-            "amplitude": t["amplitude"],
-            "inicio": t["inicio"],
-            "fim": t["fim"],
-            "inicio_real": t["inicio_real"],
-            "fim_real": t["fim_real"],
-            "fim_dia_seguinte": t["fim_dia_seguinte"],
-            "e1_hora": t["e1_hora"],
-            "e1_mare": t["e1_mare"],
-            "e2_hora": t["e2_hora"],
-            "e2_mare": t["e2_mare"],
-            "mes": t["mes"],
-        }
-        for t in trechos_data
-    ]
-    del trechos_data
 
     for i in range(0, len(trecho_maps), _IMPORT_CHUNK):
         db.session.execute(insert(Trecho), trecho_maps[i:i + _IMPORT_CHUNK])
         db.session.flush()
         gc.collect()
-    del trecho_maps
 
     db.session.commit()
 
-    return jsonify({
-        "message": f"Importado: {n_extremos} extremos, {n_trechos} trechos",
-        "ano": ano,
-        "extremos": n_extremos,
-        "trechos": n_trechos,
-        "avisos": warnings,
-    })
+
+@bp.route("/api/importar", methods=["POST"])
+@requer_gerente
+def api_importar():
+    """Upload PDF da tábua → extrai + processa + salva no banco em chunks.
+
+    Toda resposta (sucesso ou erro) é JSON — nunca HTML. Em queda de conexão
+    (OperationalError, comum no Supabase em transação longa) há retry.
+    """
+    try:
+        if "file" not in request.files:
+            return jsonify({"error": "Nenhum arquivo enviado"}), 400
+
+        file = request.files["file"]
+        if not file.filename or not file.filename.lower().endswith(".pdf"):
+            return jsonify({"error": "Arquivo deve ser PDF"}), 400
+
+        # Salvar PDF em /tmp (sem manter em memória)
+        filename = secure_filename(file.filename)
+        filepath = Path(tempfile.gettempdir()) / filename
+        file.save(str(filepath))
+
+        # Extrair metadados/extremos (não toca no banco)
+        meta = extract_metadata(filepath)
+        extremos = extract_extremos(filepath)
+        warnings = validate_extremos(extremos)
+        n_extremos = len(extremos)
+        ano = meta.get("ano", datetime.today().year)
+
+        # Preparar maps de inserção (dicts simples, reaproveitáveis em retry).
+        # tabua_id é preenchido em _persist_import a cada tentativa.
+        extremo_maps = [
+            {
+                "tabua_id": None,
+                "data": datetime.strptime(e["data"], "%d/%m/%Y").date(),
+                "hora": e["hora"],
+                "altura_m": e["mare"],
+            }
+            for e in extremos
+        ]
+        trechos_data = calcular_trechos(extremos)
+        del extremos
+        n_trechos = len(trechos_data)
+        trecho_maps = [
+            {
+                "tabua_id": None,
+                "data": datetime.strptime(t["data"], "%d/%m/%Y").date(),
+                "status": t["status"],
+                "amplitude": t["amplitude"],
+                "inicio": t["inicio"],
+                "fim": t["fim"],
+                "inicio_real": t["inicio_real"],
+                "fim_real": t["fim_real"],
+                "fim_dia_seguinte": t["fim_dia_seguinte"],
+                "e1_hora": t["e1_hora"],
+                "e1_mare": t["e1_mare"],
+                "e2_hora": t["e2_hora"],
+                "e2_mare": t["e2_mare"],
+                "mes": t["mes"],
+            }
+            for t in trechos_data
+        ]
+        del trechos_data
+
+        # Persistir com retry — perda de conexão (Supabase) = OperationalError
+        last_err = None
+        for attempt in range(1, _IMPORT_MAX_RETRIES + 1):
+            try:
+                _persist_import(ano, meta, filename, extremo_maps, trecho_maps)
+                break
+            except OperationalError as e:
+                last_err = e
+                db.session.rollback()
+                db.session.remove()
+                if attempt < _IMPORT_MAX_RETRIES:
+                    time.sleep(_IMPORT_RETRY_WAIT)
+        else:
+            # Esgotou as tentativas — responde JSON (nunca HTML)
+            return jsonify({
+                "error": (
+                    f"Falha de conexão com o banco após {_IMPORT_MAX_RETRIES} "
+                    "tentativas. Tente novamente em instantes."
+                ),
+                "detail": str(last_err),
+            }), 500
+
+        return jsonify({
+            "message": f"Importado: {n_extremos} extremos, {n_trechos} trechos",
+            "ano": ano,
+            "extremos": n_extremos,
+            "trechos": n_trechos,
+            "avisos": warnings,
+        })
+    except Exception as e:
+        # Qualquer erro inesperado vira JSON — evita o HTML 500 padrão do
+        # Flask, que no frontend quebra com "Unexpected token '<'".
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------------

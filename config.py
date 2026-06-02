@@ -24,6 +24,17 @@ class Config:
         "pool_pre_ping": True,
         "pool_recycle": 300,
     }
+    # Keepalives mantêm a conexão TCP viva em transações longas (ex.: importação
+    # da tábua) e evitam que o Supabase derrube o socket ocioso. São parâmetros
+    # do libpq/psycopg2: só se aplicam ao Postgres — passá-los ao SQLite quebra
+    # a conexão (sqlite3.connect não aceita esses kwargs).
+    if SQLALCHEMY_DATABASE_URI.startswith("postgresql"):
+        SQLALCHEMY_ENGINE_OPTIONS["connect_args"] = {
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
+        }
     UPLOAD_FOLDER = str(BASE_DIR / "uploads")
 
     # Senhas de acesso (obrigatórias via .env)
