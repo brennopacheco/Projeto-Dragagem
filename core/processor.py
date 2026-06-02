@@ -66,9 +66,8 @@ def calcular_trechos(extremos: list[dict]) -> list[dict]:
         e1 = extremos[i]
         e2 = extremos[i + 1]
 
-        # Converter para datetime
+        # Converter E1 para datetime (E2 não é necessário; usamos só e2["mare"])
         dt1 = datetime.strptime(f"{e1['data']} {e1['hora']}", "%d/%m/%Y %H:%M")
-        dt2 = datetime.strptime(f"{e2['data']} {e2['hora']}", "%d/%m/%Y %H:%M")
 
         # Status: EN (enchente) se maré sobe, VZ (vazante) se desce
         status = "EN" if e2["mare"] > e1["mare"] else "VZ"
