@@ -378,6 +378,17 @@ PROG_FIELDS = [
     "ang_nozzle", "direcao", "vel_frente", "vel_re", "consumo_diesel",
 ]
 
+TRECHO_HORARIO_FIELDS = ("inicio", "fim")
+
+
+def _valid_horario(val: str) -> bool:
+    """Valida formato HH:MM entre 00:00 e 23:59."""
+    try:
+        h, m = val.split(":")
+        return len(h) == 2 and len(m) == 2 and 0 <= int(h) <= 23 and 0 <= int(m) <= 59
+    except Exception:
+        return False
+
 KP_RANGES = [
     (0, 50, ["Berço I", "Berço II", "Berco I", "Berco II"]),
     (50, 800, ["Bacia"]),
@@ -427,6 +438,14 @@ def api_programacao(trecho_id: int):
     for field in PROG_FIELDS:
         if field in data:
             setattr(prog, field, data[field])
+
+    # Horários editáveis diretamente no Trecho
+    for field in TRECHO_HORARIO_FIELDS:
+        if field in data:
+            val = (data[field] or "").strip()
+            if val and not _valid_horario(val):
+                return jsonify({"error": f"Formato inválido para '{field}': use HH:MM (00:00-23:59)"}), 400
+            setattr(trecho, field, val)
 
     db.session.commit()
 

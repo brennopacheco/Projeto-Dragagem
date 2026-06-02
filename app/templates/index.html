@@ -422,8 +422,8 @@
       html += `<td style="font-weight:600;text-align:left;padding-left:10px">${realocIcon}${showDate ? t.data + ' <span style="color:#8a94a8;font-weight:400">' + diaSemana(t.data) + '</span>' : ''}</td>`;
       html += `<td class="${statusClass}">${t.status}</td>`;
       html += `<td>${t.amplitude}</td>`;
-      html += `<td style="font-weight:500">${t.inicio}</td>`;
-      html += `<td style="font-weight:500">${t.fim}</td>`;
+      html += `<td style="font-weight:500">${makeInput(t.inicio, t.id, 'inicio', 50)}</td>`;
+      html += `<td style="font-weight:500">${makeInput(t.fim, t.id, 'fim', 50)}</td>`;
       html += `<td>${makeSelect(AREAS, t.area, t.id, 'area')}</td>`;
       html += `<td>${makeInput(t.kp_inicio, t.id, 'kp_inicio', 50)}</td>`;
       html += `<td>${makeInput(t.kp_final, t.id, 'kp_final', 50)}</td>`;
