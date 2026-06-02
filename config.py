@@ -37,6 +37,12 @@ class Config:
         }
     UPLOAD_FOLDER = str(BASE_DIR / "uploads")
 
+    # Cookies de sessão. SECURE exige HTTPS (ok em produção/Render e em
+    # localhost, que os navegadores tratam como contexto seguro).
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+
     # Senhas de acesso (obrigatórias via .env)
     SENHA_GERENTE = os.environ.get("SENHA_GERENTE")
     SENHA_COMANDANTE = os.environ.get("SENHA_COMANDANTE")
