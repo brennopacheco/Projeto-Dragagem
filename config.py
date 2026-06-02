@@ -40,3 +40,11 @@ class Config:
             raise RuntimeError(
                 f"Variáveis obrigatórias não definidas no .env: {', '.join(missing)}"
             )
+        # Em produção (ENV=production) exigir banco persistente: SQLite em disco
+        # efêmero (Heroku/Railway) perde todos os dados a cada restart.
+        if os.environ.get("ENV", "").lower() == "production" and not os.environ.get("DATABASE_URL"):
+            raise RuntimeError(
+                "ENV=production exige DATABASE_URL (Postgres). "
+                "Sem ela o app usaria SQLite em disco efêmero e perderia "
+                "todos os dados a cada restart."
+            )

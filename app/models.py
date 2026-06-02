@@ -92,7 +92,11 @@ class Realocacao(db.Model):
     __tablename__ = "realocacoes"
 
     id = db.Column(db.Integer, primary_key=True)
-    trecho_cancelado_id = db.Column(db.Integer, db.ForeignKey("trechos.id"), nullable=False)
+    trecho_cancelado_id = db.Column(
+        db.Integer,
+        db.ForeignKey("trechos.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     status_afetado = db.Column(db.Text, nullable=False)       # "EN" ou "VZ"
     total_trechos_afetados = db.Column(db.Integer, nullable=False)
     dados_originais = db.Column(db.Text, nullable=False)       # JSON snapshot

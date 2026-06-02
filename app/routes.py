@@ -316,8 +316,13 @@ def api_reprocessar_trechos():
             for e in extremos_db
         ]
 
-        # Remover trechos antigos
-        Trecho.query.filter_by(tabua_id=tabua.id).delete()
+        # Remover trechos antigos via ORM (db.session.delete em loop) para
+        # acionar o cascade de Programacao e o SET NULL das Realocacoes.
+        # Bulk delete (.delete()) ignora cascade ORM -> deixa orfaos no SQLite
+        # e estoura ForeignKeyViolation no Postgres.
+        for t_antigo in Trecho.query.filter_by(tabua_id=tabua.id).all():
+            db.session.delete(t_antigo)
+        db.session.flush()
 
         # Calcular e salvar novos trechos
         trechos_data = calcular_trechos(extremos)
