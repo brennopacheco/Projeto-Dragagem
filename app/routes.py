@@ -112,6 +112,22 @@ def requer_comandante(f):
     return wrapper
 
 
+def requer_login(f):
+    """Decorator: exige sessão de gerente OU comandante (rotas de leitura).
+
+    Para rotas /api/* responde 401 JSON (não quebra o fetch().json() do
+    frontend); para páginas, redireciona ao login do gerente.
+    """
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if session.get("gerente") or session.get("comandante"):
+            return f(*args, **kwargs)
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Não autorizado. Faça login."}), 401
+        return redirect(url_for("main.gerente"))
+    return wrapper
+
+
 # ---------------------------------------------------------------------------
 # Páginas
 # ---------------------------------------------------------------------------
@@ -165,6 +181,7 @@ def config_page():
 
 
 @bp.route("/visualizar")
+@requer_login
 def visualizar_page():
     return render_template("visualizar.html")
 
@@ -446,6 +463,7 @@ def api_reprocessar_trechos():
 
 
 @bp.route("/api/trechos")
+@requer_login
 def api_trechos():
     """Retorna trechos da semana com dados operacionais.
 
@@ -757,6 +775,7 @@ def api_cancelar_trecho():
 
 
 @bp.route("/api/realocacoes")
+@requer_login
 def api_realocacoes():
     """Lista realocações que afetam trechos da semana."""
     semana_str = request.args.get("semana")
@@ -810,6 +829,7 @@ def api_realocacoes():
 
 
 @bp.route("/api/config", methods=["GET"])
+@requer_login
 def api_config_get():
     cfg = ConfigProjeto.query.first()
     if not cfg:
@@ -847,6 +867,7 @@ def api_config_put():
 
 
 @bp.route("/api/padroes", methods=["GET"])
+@requer_login
 def api_padroes_get():
     vp = ValoresPadrao.query.first()
     if not vp:
@@ -921,6 +942,7 @@ def _get_export_data(semana_str: str | None):
 
 
 @bp.route("/api/exportar/excel")
+@requer_login
 def api_exportar_excel():
     from core.exporter import exportar_excel
 
@@ -937,6 +959,7 @@ def api_exportar_excel():
 
 
 @bp.route("/api/exportar/pdf")
+@requer_login
 def api_exportar_pdf():
     from core.exporter import exportar_pdf
 
