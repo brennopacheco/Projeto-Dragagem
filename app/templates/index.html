@@ -48,6 +48,15 @@
   <button class="realoc-banner-close" onclick="document.getElementById('realoc-banner').style.display='none'" title="Fechar">&#10005;</button>
 </div>
 
+<!-- ===== Banner Avisos de Importacao ===== -->
+<div class="card" id="import-avisos" style="display:none;background:#fff8e1;border-left:4px solid #F58A18">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <strong style="color:#8a6d1a">&#9888; Avisos da importação</strong>
+    <button onclick="document.getElementById('import-avisos').style.display='none'" style="border:none;background:none;cursor:pointer;font-size:14px;color:#8a6d1a" title="Fechar">&#10005;</button>
+  </div>
+  <ul id="import-avisos-list" style="margin:8px 0 0 18px;font-size:12px;color:#5a4a1a;line-height:1.6"></ul>
+</div>
+
 <!-- ===== Valores Padrao ===== -->
 <div class="card defaults-bar">
   <div class="flex items-center justify-between flex-wrap gap-8">
@@ -537,6 +546,16 @@
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error);
       toast(`${data.extremos} extremos, ${data.trechos} trechos importados`);
+      // Exibe avisos de validação (alerta amarelo), se houver
+      const avisos = data.avisos || [];
+      const avisosBox = document.getElementById('import-avisos');
+      if (avisos.length) {
+        document.getElementById('import-avisos-list').innerHTML =
+          avisos.map(a => `<li>${escHtml(a)}</li>`).join('');
+        avisosBox.style.display = 'block';
+      } else {
+        avisosBox.style.display = 'none';
+      }
       closeImportModal();
       loadTrechos();
     } catch(err) {

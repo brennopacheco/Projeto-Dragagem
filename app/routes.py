@@ -1,6 +1,5 @@
 """app/routes.py — Rotas da API e páginas."""
 
-import gc
 import tempfile
 import time
 from datetime import date, datetime, timedelta
@@ -61,14 +60,6 @@ def _trecho_to_dict(trecho: Trecho) -> dict:
         "amplitude": trecho.amplitude,
         "inicio": trecho.inicio,
         "fim": trecho.fim,
-        "inicio_real": trecho.inicio_real,
-        "fim_real": trecho.fim_real,
-        "fim_dia_seguinte": trecho.fim_dia_seguinte,
-        "e1_hora": trecho.e1_hora,
-        "e1_mare": trecho.e1_mare,
-        "e2_hora": trecho.e2_hora,
-        "e2_mare": trecho.e2_mare,
-        "mes": trecho.mes,
         # Programação (pode ser None)
         "area": prog.area if prog else None,
         "kp_inicio": prog.kp_inicio if prog else None,
@@ -178,12 +169,6 @@ def comandante_logout():
 @requer_gerente
 def config_page():
     return render_template("config.html")
-
-
-@bp.route("/visualizar")
-@requer_login
-def visualizar_page():
-    return render_template("visualizar.html")
 
 
 # ---------------------------------------------------------------------------
@@ -296,10 +281,18 @@ def api_importar():
         filepath = Path(tempfile.gettempdir()) / filename
         file.save(str(filepath))
 
-        # Extrair metadados/extremos (não toca no banco)
-        meta = extract_metadata(filepath)
-        extremos = extract_extremos(filepath)
-        warnings = validate_extremos(extremos)
+        # Extrair metadados/extremos (não toca no banco). O PDF temporário é
+        # removido logo após a extração — não é mais necessário daqui pra frente.
+        try:
+            meta = extract_metadata(filepath)
+            extremos = extract_extremos(filepath)
+            warnings = validate_extremos(extremos)
+        finally:
+            try:
+                filepath.unlink(missing_ok=True)
+            except OSError:
+                pass
+
         n_extremos = len(extremos)
         ano = meta.get("ano", datetime.today().year)
 
@@ -325,19 +318,10 @@ def api_importar():
                 "amplitude": t["amplitude"],
                 "inicio": t["inicio"],
                 "fim": t["fim"],
-                "inicio_real": t["inicio_real"],
-                "fim_real": t["fim_real"],
-                "fim_dia_seguinte": t["fim_dia_seguinte"],
-                "e1_hora": t["e1_hora"],
-                "e1_mare": t["e1_mare"],
-                "e2_hora": t["e2_hora"],
-                "e2_mare": t["e2_mare"],
-                "mes": t["mes"],
             }
             for t in trechos_data
         ]
         del trechos_data
-        gc.collect()  # solta as listas grandes antes da fase de inserção
 
         # Persistir com retry — perda de conexão (Supabase) = OperationalError
         last_err = None
@@ -431,14 +415,6 @@ def api_reprocessar_trechos():
                 amplitude=t["amplitude"],
                 inicio=t["inicio"],
                 fim=t["fim"],
-                inicio_real=t["inicio_real"],
-                fim_real=t["fim_real"],
-                fim_dia_seguinte=t["fim_dia_seguinte"],
-                e1_hora=t["e1_hora"],
-                e1_mare=t["e1_mare"],
-                e2_hora=t["e2_hora"],
-                e2_mare=t["e2_mare"],
-                mes=t["mes"],
             ))
 
         total_novos += len(trechos_data)
@@ -835,7 +811,7 @@ def api_config_get():
     if not cfg:
         cfg = ConfigProjeto()
         db.session.add(cfg)
-        db.session.commit()
+        db.session.flush()  # popula os defaults sem persistir (GET não grava)
     return jsonify({
         "empresa": cfg.empresa,
         "vessel": cfg.vessel,
@@ -873,7 +849,7 @@ def api_padroes_get():
     if not vp:
         vp = ValoresPadrao()
         db.session.add(vp)
-        db.session.commit()
+        db.session.flush()  # popula os defaults sem persistir (GET não grava)
     return jsonify({
         "sistema_dragagem": vp.sistema_dragagem,
         "dist_fundo": vp.dist_fundo,

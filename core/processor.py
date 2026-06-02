@@ -55,12 +55,7 @@ def calcular_trechos(extremos: list[dict]) -> list[dict]:
             {"data": "DD/MM/YYYY", "hora": "HH:MM", "mare": float}
 
     Retorna lista de trechos:
-        {
-            "data", "status", "amplitude", "inicio", "fim",
-            "inicio_real", "fim_real", "fim_dia_seguinte",
-            "e1_data", "e1_hora", "e1_mare",
-            "e2_data", "e2_hora", "e2_mare", "mes"
-        }
+        {"data", "status", "amplitude", "inicio", "fim"}
     """
     if len(extremos) < 2:
         return []
@@ -97,14 +92,6 @@ def calcular_trechos(extremos: list[dict]) -> list[dict]:
 
         # Data do trecho = data do início arredondado (não necessariamente data de E1)
         data_trecho = inicio_arr.strftime("%d/%m/%Y")
-        mes = inicio_arr.month
-
-        # Indicador de fim no dia seguinte ao início (após corte)
-        fim_dia_seguinte = "S" if fim_arr.date() > inicio_arr.date() else "N"
-
-        # Horários reais (contexto, sem arredondamento)
-        inicio_real_str = (dt1 + timedelta(hours=1)).strftime("%H:%M")
-        fim_real_str = (inicio_arr + timedelta(hours=4)).strftime("%H:%M")  # fim sem corte
 
         # Amplitude formatada
         amplitude = _format_amplitude(e1["mare"], e2["mare"])
@@ -115,16 +102,6 @@ def calcular_trechos(extremos: list[dict]) -> list[dict]:
             "amplitude": amplitude,
             "inicio": inicio_arr.strftime("%H:%M"),
             "fim": fim_arr.strftime("%H:%M"),
-            "inicio_real": inicio_real_str,
-            "fim_real": fim_real_str,
-            "fim_dia_seguinte": fim_dia_seguinte,
-            "e1_data": e1["data"],
-            "e1_hora": e1["hora"],
-            "e1_mare": e1["mare"],
-            "e2_data": e2["data"],
-            "e2_hora": e2["hora"],
-            "e2_mare": e2["mare"],
-            "mes": mes,
         })
 
     return trechos
@@ -152,22 +129,17 @@ if __name__ == "__main__":
     print("\nPrimeiros 10 trechos:")
     for t in trechos[:10]:
         print(f"  {t['data']} {t['status']} amp={t['amplitude']}  "
-              f"{t['inicio']}-{t['fim']}  "
-              f"(real {t['inicio_real']})  "
-              f"dia+1={t['fim_dia_seguinte']}")
+              f"{t['inicio']}-{t['fim']}")
 
     print("\nÚltimos 5 trechos:")
     for t in trechos[-5:]:
         print(f"  {t['data']} {t['status']} amp={t['amplitude']}  "
-              f"{t['inicio']}-{t['fim']}  "
-              f"(real {t['inicio_real']})  "
-              f"dia+1={t['fim_dia_seguinte']}")
+              f"{t['inicio']}-{t['fim']}")
 
     # Estatísticas
     en_count = sum(1 for t in trechos if t["status"] == "EN")
     vz_count = sum(1 for t in trechos if t["status"] == "VZ")
-    ds_count = sum(1 for t in trechos if t["fim_dia_seguinte"] == "S")
-    print(f"\nEN: {en_count} | VZ: {vz_count} | Fim dia seguinte: {ds_count}")
+    print(f"\nEN: {en_count} | VZ: {vz_count}")
 
     # Validar casos de teste
     # exp_inicio=None significa que o trecho deve ser DESCARTADO (inicio >= meia-noite)

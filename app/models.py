@@ -49,14 +49,6 @@ class Trecho(db.Model):
     amplitude = db.Column(db.Text, nullable=False)    # "4.90"
     inicio = db.Column(db.Text, nullable=False)       # arredondado "06:30"
     fim = db.Column(db.Text, nullable=False)          # arredondado "10:30"
-    inicio_real = db.Column(db.Text, nullable=False)
-    fim_real = db.Column(db.Text, nullable=False)
-    fim_dia_seguinte = db.Column(db.Text, nullable=False)  # "S" ou "N"
-    e1_hora = db.Column(db.Text)
-    e1_mare = db.Column(db.Float)
-    e2_hora = db.Column(db.Text)
-    e2_mare = db.Column(db.Float)
-    mes = db.Column(db.Integer)
 
     programacao = db.relationship("Programacao", backref="trecho", uselist=False,
                                   cascade="all, delete-orphan")

@@ -35,8 +35,6 @@ class Config:
             "keepalives_interval": 10,
             "keepalives_count": 5,
         }
-    UPLOAD_FOLDER = str(BASE_DIR / "uploads")
-
     # Cookies de sessão. SECURE exige HTTPS (ok em produção/Render e em
     # localhost, que os navegadores tratam como contexto seguro).
     SESSION_COOKIE_SECURE = True
